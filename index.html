@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Playable 3D simulation of a robot chessboard: you play on the board, press the space bar to send, and the robot arm plays your opponent's moves.">
+<meta name="description" content="Playable 3D simulation of a robot chessboard: you play on the board, press the space bar to send, and the robot arm (articulated or SCARA) plays your opponent's moves, with a Stockfish coach.">
 <meta property="og:title" content="Across the Table">
 <meta property="og:description" content="A robot chessboard that plays your online opponent, designed and built by Jayant Bhanse.">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}*,*::before,*::after{box-sizing:border-box}body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
@@ -16,47 +16,57 @@
 /* Layout: a workbench — the 3D machine is the stage on the left, the operator panel sits beside it like the touchscreen on the real build; stacks to one column on phones. */
 :root{
   --bg:#ECEFF1; --panel:#FFFFFF; --stage:#E2E7EA; --fg:#14191C; --muted:#56636B; --line:#CBD3D8;
-  --amber:#C9741F; --amber-soft:#F6E2CB; --teal:#1F8A6E; --teal-soft:#D5EFE7; --red:#C2413A; --green:#2E9E48;
+  --amber:#C9741F; --amber-soft:#F6E2CB; --teal:#1F8A6E; --teal-soft:#D5EFE7; --red:#C2413A; --red-soft:#F6DEDB; --green:#2E9E48; --green-soft:#DCF1E1; --blue:#2F6FC9;
   --display:"Chakra Petch","Bahnschrift","Arial Narrow",system-ui,sans-serif;
   --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0F1315; --panel:#171D20; --stage:#12181B; --fg:#E4E9EB; --muted:#93A1A8; --line:#2A3337;
-  --amber:#E8962F; --amber-soft:#3A2A17; --teal:#3FC29F; --teal-soft:#16332B; --red:#E5675F; --green:#52D16E; color-scheme:dark}}
+  --amber:#E8962F; --amber-soft:#3A2A17; --teal:#3FC29F; --teal-soft:#16332B; --red:#E5675F; --red-soft:#3B1D1A; --green:#52D16E; --green-soft:#17331F; --blue:#6EA4F0; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0F1315; --panel:#171D20; --stage:#12181B; --fg:#E4E9EB; --muted:#93A1A8; --line:#2A3337;
-  --amber:#E8962F; --amber-soft:#3A2A17; --teal:#3FC29F; --teal-soft:#16332B; --red:#E5675F; --green:#52D16E; color-scheme:dark}
+  --amber:#E8962F; --amber-soft:#3A2A17; --teal:#3FC29F; --teal-soft:#16332B; --red:#E5675F; --red-soft:#3B1D1A; --green:#52D16E; --green-soft:#17331F; --blue:#6EA4F0; color-scheme:dark}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 32px}
 .wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
 header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px}
 h1{font-family:var(--display);font-weight:600;font-size:clamp(28px,4vw,42px);line-height:1;margin:0;letter-spacing:.01em;text-wrap:balance}
 .byline{font-size:13px;color:var(--muted);margin:6px 0 0}
+.armtabs{display:inline-flex;margin-top:12px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.armtabs button{font:600 14px var(--display);padding:9px 16px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.armtabs button[aria-selected="true"]{background:var(--teal-soft);color:var(--teal)}
+.armtabs button:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
 .legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:12.5px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
 .stage{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
 @media (max-width:920px){.stage{grid-template-columns:minmax(0,1fr)}}
+.left{display:flex;flex-direction:column;gap:12px;min-width:0}
 .view{position:relative;height:clamp(360px,68vh,680px);background:var(--stage);border:1px solid var(--line);border-radius:14px;overflow:hidden;touch-action:none;cursor:grab}
 .view canvas{display:block;width:100%;height:100%}
-.views{position:absolute;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap}
+.views{position:absolute;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 20px)}
 .chip{font:500 12px var(--body);padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
 .chip[aria-pressed="true"]{border-color:var(--teal);color:var(--teal)}
 .chip.xr[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+.chip:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 .labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .lab{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:var(--amber);color:#1B1206;font:600 12px var(--display);display:flex;align-items:center;justify-content:center;border:2px solid var(--panel)}
-.left{display:flex;flex-direction:column;gap:12px;min-width:0}
+.hint{position:absolute;bottom:10px;left:12px;right:58px;font-size:12px;color:var(--muted);pointer-events:none}
+.zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:500 20px var(--body);cursor:pointer;line-height:1}
+.floatbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:8px;max-width:calc(100% - 70px)}
+.floatbar .btn{white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.floatbar .space{width:auto;padding:12px 18px}
+.legendBox{margin:0;padding:12px 14px;list-style:none;background:var(--panel);border:1px solid var(--line);border-radius:12px;font-size:13px;line-height:1.4;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px 18px}
+.legendBox[hidden]{display:none}
+.legendBox li{display:flex;gap:8px;align-items:flex-start}
+.legendBox b{flex:none;width:18px;height:18px;border-radius:50%;background:var(--amber);color:#1B1206;font:600 11px var(--display);display:flex;align-items:center;justify-content:center}
 .howto h2{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 8px}
 .howto ol{margin:0;padding-left:1.3em;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px}
 .howto li{font-size:14px;color:var(--muted);max-width:65ch}
 .howto li::marker{color:var(--amber);font:600 14px var(--display)}
 .howto b{color:var(--fg);font-weight:500}
-.legendBox{margin:0;padding:12px 14px;list-style:none;background:var(--panel);border:1px solid var(--line);border-radius:12px;font-size:13px;line-height:1.4;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px 18px}
-.legendBox[hidden]{display:none}
-.legendBox li{display:flex;gap:8px;align-items:flex-start}
-.legendBox b{flex:none;width:18px;height:18px;border-radius:50%;background:var(--amber);color:#1B1206;font:600 11px var(--display);display:flex;align-items:center;justify-content:center}
-.hint{position:absolute;bottom:10px;left:12px;right:12px;font-size:12px;color:var(--muted);pointer-events:none}
 .panel{display:flex;flex-direction:column;gap:12px;min-width:0}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
 .eyebrow{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
@@ -70,31 +80,44 @@ button{font-family:var(--body)}
 .btn{font:500 14px var(--body);padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
 .btn:hover:not(:disabled){border-color:var(--muted)}
 .btn:disabled{opacity:.45;cursor:not-allowed}
-.btn:focus-visible,.chip:focus-visible,.seg button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.btn:focus-visible,.seg button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 .space{width:100%;background:var(--amber);border-color:var(--amber);color:#1B1206;font-family:var(--display);font-size:16px;padding:14px}
 .space:hover:not(:disabled){filter:brightness(1.06);border-color:var(--amber)}
+.undo{color:var(--red)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--red);display:inline-block}
 kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;padding:1px 6px;opacity:.75}
 .row{display:flex;gap:8px;flex-wrap:wrap}
-.row .btn{flex:1 1 120px}
+.row .btn{flex:1 1 90px}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .seg button{flex:1;font:500 12.5px var(--body);padding:8px 6px;border:0;background:transparent;color:var(--muted);cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--teal-soft);color:var(--teal)}
 .setting{display:flex;flex-direction:column;gap:6px}
-.setting label,.setting .lbl{font-size:12.5px;color:var(--muted)}
-.moves{font:400 13px var(--mono);font-variant-numeric:tabular-nums;max-height:180px;overflow:auto;display:grid;grid-template-columns:2.4em 1fr 1fr;gap:2px 8px;margin:0}
+.setting .lbl{font-size:12.5px;color:var(--muted)}
+.small{font-size:12px;color:var(--muted);margin:0}
+.moves{font:400 13px var(--mono);font-variant-numeric:tabular-nums;max-height:200px;overflow:auto;display:grid;grid-template-columns:2.4em 1fr 1fr;gap:3px 8px;margin:0}
 .moves .n{color:var(--muted)}
+.v{font:600 10.5px var(--mono);padding:0 4px;border-radius:4px;margin-left:5px;vertical-align:1px}
+.v-best{background:var(--green-soft);color:var(--green)}
+.v-good{background:var(--teal-soft);color:var(--teal)}
+.v-inacc{background:var(--amber-soft);color:var(--amber)}
+.v-mistake,.v-blunder{background:var(--red-soft);color:var(--red)}
 .empty{color:var(--muted);font-size:13px;margin:0}
+.evalbar{height:10px;border-radius:999px;background:var(--line);overflow:hidden;margin:4px 0 2px}
+.evalbar i{display:block;height:100%;width:50%;background:var(--teal);transition:width .4s ease}
+.verdict{margin:8px 0 10px;font-size:13.5px}
+.verdict b{font-weight:500}
+.past{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.past li{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.past li:last-child{border-bottom:0}
+.past .r{font:500 12px var(--mono)}
+.past .r.win{color:var(--green)}.past .r.loss{color:var(--red)}
+.past span{color:var(--muted);font-variant-numeric:tabular-nums}
 .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .notes h2{font-family:var(--display);font-size:16px;font-weight:600;margin:0 0 4px}
 .notes p{margin:0;font-size:13.5px;color:var(--muted);max-width:65ch}
-@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
-.zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
-.zoom button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:500 20px var(--body);cursor:pointer;line-height:1}
-.floatbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:8px;max-width:calc(100% - 70px)}
-.floatbar .btn{white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.25)}
-.floatbar .space{width:auto;padding:12px 18px}
 @media (pointer:coarse){.view{touch-action:pan-y}}
-@media (max-width:700px){.view{height:clamp(340px,58vh,520px)}.hint{right:58px;font-size:11.5px}h1{font-size:30px}}
+@media (max-width:700px){.view{height:clamp(340px,58vh,520px)}.hint{font-size:11.5px}h1{font-size:30px}}
+@media (prefers-reduced-motion: reduce){.evalbar i{transition:none}}
 </style>
 
 </head>
@@ -104,40 +127,49 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
     <div>
       <h1>Across the Table</h1>
       <p class="byline">A robot chessboard that plays your online opponent · designed and built by Jayant Bhanse</p>
+      <div class="armtabs" role="tablist" aria-label="Arm design">
+        <button role="tab" id="tabArt" data-arm="articulated" aria-selected="true">Articulated arm</button>
+        <button role="tab" id="tabScara" data-arm="scara" aria-selected="false">SCARA arm</button>
+      </div>
     </div>
     <div class="legend" aria-label="Square light colours">
-      <span><i class="sw" style="background:var(--green)"></i>Legal squares for the lifted piece</span>
-      <span><i class="sw" style="background:var(--red)"></i>Illegal square, or king in check</span>
+      <span><i class="sw" style="background:var(--green)"></i>Legal squares</span>
+      <span><i class="sw" style="background:var(--red)"></i>Illegal square or check</span>
       <span><i class="sw" style="background:var(--amber)"></i>Opponent's move</span>
+      <span><i class="sw" style="background:var(--blue)"></i>Coach hint</span>
     </div>
   </header>
 
   <div class="stage">
-    <div class="left"><div class="view" id="view">
-      <canvas id="cv" aria-label="3D view of the robot chessboard. Click a white piece, then a lit square."></canvas>
-      <div class="views" role="group" aria-label="Camera">
-        <button class="chip" data-view="player" aria-pressed="true">Your seat</button>
-        <button class="chip" data-view="side" aria-pressed="false">Side</button>
-        <button class="chip" data-view="top" aria-pressed="false">Top</button>
-        <button class="chip" data-view="robot" aria-pressed="false">Robot's seat</button>
-        <button class="chip xr" id="xray" aria-pressed="false">Show electronics</button>
+    <div class="left">
+      <div class="view" id="view">
+        <canvas id="cv" aria-label="3D view of the robot chessboard. Click a white piece, then a lit square."></canvas>
+        <div class="views" role="group" aria-label="Camera">
+          <button class="chip" data-view="player" aria-pressed="true">Your seat</button>
+          <button class="chip" data-view="side" aria-pressed="false">Side</button>
+          <button class="chip" data-view="top" aria-pressed="false">Top</button>
+          <button class="chip" data-view="robot" aria-pressed="false">Robot's seat</button>
+          <button class="chip xr" id="xray" aria-pressed="false">Show electronics</button>
+        </div>
+        <div class="labels" id="labels" hidden></div>
+        <div class="hint" id="hint">Click a white piece, then a green square. Drag to orbit, scroll to zoom.</div>
+        <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button></div>
+        <div class="floatbar" id="floatbar" hidden><button class="btn undo" id="fUndo"><i class="dot"></i>Cancel</button><button class="btn space" id="fSend">Send move</button></div>
       </div>
-      <div class="labels" id="labels" hidden></div>
-      <div class="hint" id="hint">Click a white piece, then a green square. Drag to orbit, scroll to zoom.</div>
-      <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button></div>
-      <div class="floatbar" id="floatbar" hidden><button class="btn" id="fUndo">Take back</button><button class="btn space" id="fSend">Send move</button></div>
+      <ol class="legendBox" id="legend" hidden aria-label="Electronics parts"></ol>
+      <section class="card howto" aria-labelledby="howto-h">
+        <h2 id="howto-h">How to play</h2>
+        <ol>
+          <li><b>Lift a piece.</b> You play white. Click one of your pieces and its legal squares glow green.</li>
+          <li><b>Make your move.</b> Click a green square. Any other square flashes red, just like the real board.</li>
+          <li><b>Press the space bar.</b> Use your keyboard, the amber Send move button, or the bar on the board itself.</li>
+          <li><b>Watch the arm reply.</b> It reaches across, picks up the opponent's piece and plays it. Amber squares show its move. A red king means check.</li>
+          <li><b>Undo with the red button.</b> Before you send, it cancels your move. After the reply, it takes back the last pair: the arm reverses its own move and a blue square shows where your piece goes back.</li>
+          <li><b>Train with the coach.</b> Stockfish rates every move you send and can show a hint. Finished games are kept in the board's memory so you can see yourself improve.</li>
+          <li><b>Compare the arms.</b> Switch between the articulated and SCARA designs at the top, and press Show electronics to see inside.</li>
+        </ol>
+      </section>
     </div>
-    <ol class="legendBox" id="legend" hidden aria-label="Electronics parts"></ol>
-    <section class="card howto" aria-labelledby="howto-h">
-      <h2 id="howto-h">How to play</h2>
-      <ol>
-        <li><b>Lift a piece.</b> You play white. Click one of your pieces and its legal squares glow green.</li>
-        <li><b>Make your move.</b> Click a green square. Any other square flashes red, just like the real board.</li>
-        <li><b>Press the space bar.</b> Use your keyboard, the amber Send move button, or the bar on the board itself. Changed your mind? Take back works until you press it.</li>
-        <li><b>Watch the arm reply.</b> It reaches across, picks up the opponent's piece and plays it. The amber squares show its move, and a red king means you're in check.</li>
-        <li><b>Look around.</b> Drag to orbit, scroll to zoom, switch cameras, or press Show electronics to see inside the platform.</li>
-      </ol>
-    </section></div>
 
     <aside class="panel">
       <div class="card" aria-live="polite">
@@ -149,9 +181,17 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
       <div class="card" style="display:flex;flex-direction:column;gap:10px">
         <button class="btn space" id="spaceBtn" disabled>Send move <kbd>Space</kbd></button>
         <div class="row">
-          <button class="btn" id="undoBtn" disabled>Take back</button>
+          <button class="btn undo" id="undoBtn" disabled><i class="dot"></i>Undo</button>
           <button class="btn" id="newBtn">New game</button>
         </div>
+        <p class="small" id="undoNote">The red Undo is the physical button beside the space bar.</p>
+      </div>
+      <div class="card" aria-live="polite">
+        <p class="eyebrow">Coach</p>
+        <div class="evalbar" aria-hidden="true"><i id="evalFill"></i></div>
+        <p class="sub" id="evalTxt">Even position</p>
+        <p class="verdict" id="verdict">Send a move and the coach rates it.</p>
+        <button class="btn" id="hintBtn" disabled style="width:100%">Show a hint</button>
       </div>
       <div class="card" style="display:flex;flex-direction:column;gap:12px">
         <div class="setting">
@@ -160,6 +200,14 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
             <button data-v="1" aria-pressed="true">Casual</button>
             <button data-v="2" aria-pressed="false">Club</button>
             <button data-v="3" aria-pressed="false">Strong</button>
+          </div>
+          <p class="small" id="engineLbl">Engine: loading Stockfish…</p>
+        </div>
+        <div class="setting">
+          <span class="lbl" id="coachLbl">Coach</span>
+          <div class="seg" role="group" aria-labelledby="coachLbl" id="coach">
+            <button data-v="1" aria-pressed="true">On</button>
+            <button data-v="0" aria-pressed="false">Off</button>
           </div>
         </div>
         <div class="setting">
@@ -176,15 +224,21 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
         <div class="moves" id="moves"></div>
         <p class="empty" id="movesEmpty">No moves yet.</p>
       </div>
+      <div class="card">
+        <p class="eyebrow">Board memory · past games</p>
+        <ul class="past" id="past"></ul>
+        <p class="sub" id="trend"></p>
+      </div>
     </aside>
   </div>
 
-  <section class="notes" aria-label="What this demo proves">
-    <div class="card"><h2>Commit, then send</h2><p>The 64 hall sensors can't tell when you've finished a move, so nothing is sent until you press the space bar. Take back works until then, like a hand still on the piece.</p></div>
+  <section class="notes" aria-label="Design notes">
+    <div class="card" id="armNote"><h2 id="armNoteH">Why an articulated arm</h2><p id="armNoteP"></p></div>
+    <div class="card"><h2>Commit, cancel, undo</h2><p>The hall sensors can't tell when you've finished a move, so nothing is sent until you press the space bar. The red button cancels before sending, or takes back a full move after. Online, that takeback goes to the opponent as a request they accept, which the Lichess Board API supports.</p></div>
+    <div class="card"><h2>A board that remembers</h2><p>The Pi keeps every game, move by move, with Stockfish's verdict on each of your moves. Over time it shows whether your blunders are falling and which phase of the game costs you most, which turns the board into a training partner.</p></div>
     <div class="card"><h2>Captures go first</h2><p>When the opponent captures, the arm clears your piece to the graveyard tray before making its own move. Castling moves king then rook. Promotion swaps in a queen.</p></div>
     <div class="card"><h2>One grip, six heights</h2><p>The hook jaws close under each piece's collar (under the lip for rooks). The arm lowers to a height looked up from the piece type, from 35 mm for a pawn to 52 mm for a king.</p></div>
-    <div class="card"><h2>Inside the platform</h2><p>Press Show electronics. Under each square sits a WS2812 LED and a hall sensor on eight strip boards. Four 16-channel muxes feed the Pi, which runs the game and talks to the arm's ESP32 over UART. A 24 V supply feeds the stepper drivers, with a 5 V buck for the Pi and LEDs.</p></div>
-    <div class="card"><h2>What stands in for Lichess</h2><p>Here a small built-in engine plays the opponent. On the real board the Pi streams the opponent's moves from the Lichess Board API, and this same arm sequence plays them out.</p></div>
+    <div class="card"><h2>Inside the platform</h2><p>Under each square sits a WS2812 LED and an analog hall sensor on eight strip boards. Four 16-channel muxes feed the Pi, which runs the game and Stockfish and talks to the arm's ESP32 over UART. A 24 V supply feeds the stepper drivers, with a 5 V buck for the Pi and LEDs.</p></div>
   </section>
 </div>
 
@@ -192,7 +246,8 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script>
 (function(){
-const view=document.getElementById('view'),cv=document.getElementById('cv');
+const $=id=>document.getElementById(id);
+const view=$('view'),cv=$('cv');
 const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
 const scene=new THREE.Scene();
@@ -201,16 +256,18 @@ scene.add(new THREE.HemisphereLight(0xffffff,0x8a8a84,0.95));
 const dl=new THREE.DirectionalLight(0xffffff,0.6);dl.position.set(300,900,500);scene.add(dl);
 const M=(c,o)=>{const m=new THREE.MeshStandardMaterial({color:c,roughness:0.6,metalness:0.08});if(o)Object.assign(m,o);return m;};
 const mesh=(g,m,x,y,z)=>{const o=new THREE.Mesh(g,m);o.position.set(x||0,y||0,z||0);return o;};
+const B=(x,y,z)=>new THREE.BoxGeometry(x,y,z);
+const C=(r1,r2,h,s)=>new THREE.CylinderGeometry(r1,r2,h,s||24);
 const root=new THREE.Group();scene.add(root);
 
 /* platform, board, trays */
 const platMat=M(0xC9A26B,{transparent:true}),frameMat=M(0xA67C4E,{transparent:true});
-const platMesh=mesh(new THREE.BoxGeometry(600,60,800),platMat,0,-30,-40);root.add(platMesh);
-const frameMesh=mesh(new THREE.BoxGeometry(460,12,460),frameMat,0,6,0);root.add(frameMesh);
+const platMesh=mesh(B(600,60,800),platMat,0,-30,-40);root.add(platMesh);
+const frameMesh=mesh(B(460,12,460),frameMat,0,6,0);root.add(frameMesh);
 const edgeMat=new THREE.LineBasicMaterial({color:0x9C8A6A});
 const platEdges=new THREE.LineSegments(new THREE.EdgesGeometry(platMesh.geometry),edgeMat);platEdges.position.copy(platMesh.position);platEdges.visible=false;root.add(platEdges);
 const frameEdges=new THREE.LineSegments(new THREE.EdgesGeometry(frameMesh.geometry),edgeMat);frameEdges.position.copy(frameMesh.position);frameEdges.visible=false;root.add(frameEdges);
-const floor=mesh(new THREE.BoxGeometry(600,3,800),M(0x3A3F44),0,-58.5,-40);floor.visible=false;root.add(floor);
+const floor=mesh(B(600,3,800),M(0x3A3F44),0,-58.5,-40);floor.visible=false;root.add(floor);
 const FILES='abcdefgh';
 const pos=(f,r)=>[-175+50*f,175-50*(r-1)];
 const sqXZ=s=>pos(FILES.indexOf(s[0]),+s[1]);
@@ -218,31 +275,31 @@ const sqMat={},sqMesh=[];
 for(let f=0;f<8;f++)for(let r=1;r<=8;r++){
   const light=(f+r)%2===1;const base=light?0xF1E6D0:0x8B5A3C;
   const m=M(base,{emissive:new THREE.Color(0),transparent:true});m.userData.base=base;
-  const [x,z]=pos(f,r);const s=mesh(new THREE.BoxGeometry(49.4,2,49.4),m,x,13,z);
+  const [x,z]=pos(f,r);const s=mesh(B(49.4,2,49.4),m,x,13,z);
   s.userData.sq=FILES[f]+r;root.add(s);sqMat[FILES[f]+r]=m;sqMesh.push(s);
 }
 [-1,1].forEach(s=>{
-  root.add(mesh(new THREE.BoxGeometry(64,4,340),M(0xD3D1C7),s*262,2,-10));
-  root.add(mesh(new THREE.BoxGeometry(68,10,4),M(0xB4B2A9),s*262,5,-182));
-  root.add(mesh(new THREE.BoxGeometry(68,10,4),M(0xB4B2A9),s*262,5,162));
+  root.add(mesh(B(64,4,340),M(0xD3D1C7),s*262,2,-10));
+  root.add(mesh(B(68,10,4),M(0xB4B2A9),s*262,5,-182));
+  root.add(mesh(B(68,10,4),M(0xB4B2A9),s*262,5,162));
 });
 
 /* electronics inside the platform and under the board */
 const elec=new THREE.Group();root.add(elec);
 const pcbG=M(0x1E6B3A),pcbP=M(0x4B3A8C),chipM=M(0x161616),silver=M(0xC9CCCF,{metalness:.5,roughness:.35}),grey=M(0xB4B2A9);
 const ledMat={};
-for(let f=0;f<8;f++){const [x]=pos(f,1);elec.add(mesh(new THREE.BoxGeometry(40,1.6,404),pcbG,x,3,0));elec.add(mesh(new THREE.BoxGeometry(26,0.8,14),grey,x,3.4,210));
+for(let f=0;f<8;f++){const [x]=pos(f,1);elec.add(mesh(B(40,1.6,404),pcbG,x,3,0));elec.add(mesh(B(26,0.8,14),grey,x,3.4,210));
   for(let r=1;r<=8;r++){const [,z]=pos(f,r);const lm=M(0xF4F4F0,{emissive:new THREE.Color(0x222222)});ledMat[FILES[f]+r]=lm;
-    elec.add(mesh(new THREE.BoxGeometry(6,1.6,6),lm,x-7,4.6,z));elec.add(mesh(new THREE.BoxGeometry(4,3,1.6),chipM,x+9,5.3,z));}}
-for(let i=0;i<4;i++){elec.add(mesh(new THREE.BoxGeometry(40,1.6,18),pcbP,-150+100*i,3,219));elec.add(mesh(new THREE.BoxGeometry(10,2,10),chipM,-150+100*i,4.6,219));}
+    elec.add(mesh(B(6,1.6,6),lm,x-7,4.6,z));elec.add(mesh(B(4,3,1.6),chipM,x+9,5.3,z));}}
+for(let i=0;i<4;i++){elec.add(mesh(B(40,1.6,18),pcbP,-150+100*i,3,219));elec.add(mesh(B(10,2,10),chipM,-150+100*i,4.6,219));}
 const pi=new THREE.Group();pi.position.set(80,-30,300);elec.add(pi);
-pi.add(mesh(new THREE.BoxGeometry(85,1.6,56),pcbG));pi.add(mesh(new THREE.BoxGeometry(14,2,14),chipM,-8,1.8,0));
-pi.add(mesh(new THREE.BoxGeometry(17,15,13),silver,34,8.3,-14));pi.add(mesh(new THREE.BoxGeometry(17,15,13),silver,34,8.3,4));pi.add(mesh(new THREE.BoxGeometry(21,13,16),silver,32,7.3,20));pi.add(mesh(new THREE.BoxGeometry(50,8,5),chipM,-6,4.8,-24));
-elec.add(mesh(new THREE.BoxGeometry(60,1.6,40),pcbG,-130,-6,300));elec.add(mesh(new THREE.BoxGeometry(14,8,10),chipM,100,-4,300));
-elec.add(mesh(new THREE.BoxGeometry(100,1.6,70),pcbG,-130,-30,-290));elec.add(mesh(new THREE.BoxGeometry(50,1.6,26),M(0x222831),-150,-28,-300));
-for(let i=0;i<3;i++){elec.add(mesh(new THREE.BoxGeometry(15,1.6,20),pcbP,-110+18*i,-28,-272));elec.add(mesh(new THREE.BoxGeometry(10,7,10),silver,-110+18*i,-23.5,-272));}
-elec.add(mesh(new THREE.BoxGeometry(110,40,60),silver,170,-30,-270));elec.add(mesh(new THREE.BoxGeometry(8,10,50),chipM,112,-30,-270));
-elec.add(mesh(new THREE.BoxGeometry(44,8,22),M(0x2A5DB0),110,-45,-150));
+pi.add(mesh(B(85,1.6,56),pcbG));pi.add(mesh(B(14,2,14),chipM,-8,1.8,0));
+pi.add(mesh(B(17,15,13),silver,34,8.3,-14));pi.add(mesh(B(17,15,13),silver,34,8.3,4));pi.add(mesh(B(21,13,16),silver,32,7.3,20));pi.add(mesh(B(50,8,5),chipM,-6,4.8,-24));
+elec.add(mesh(B(60,1.6,40),pcbG,-130,-6,300));elec.add(mesh(B(14,8,10),chipM,100,-4,300));elec.add(mesh(B(14,8,10),chipM,240,-4,300));
+elec.add(mesh(B(100,1.6,70),pcbG,-130,-30,-290));elec.add(mesh(B(50,1.6,26),M(0x222831),-150,-28,-300));
+for(let i=0;i<3;i++){elec.add(mesh(B(15,1.6,20),pcbP,-110+18*i,-28,-272));elec.add(mesh(B(10,7,10),silver,-110+18*i,-23.5,-272));}
+elec.add(mesh(B(110,40,60),silver,170,-30,-270));elec.add(mesh(B(8,10,50),chipM,112,-30,-270));
+elec.add(mesh(B(44,8,22),M(0x2A5DB0),110,-45,-150));
 const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
 function cable(pts,c,r){elec.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>V3(...p))),48,(r||1.6)*1.7,8,false),M(c)));}
 cable([[115,-35,-270],[0,-45,-280],[-80,-30,-290]],0xC0392B,2);
@@ -253,27 +310,31 @@ cable([[70,-28,280],[70,-10,240],[0,3,224]],0x3B7DD8,1.2);
 cable([[100,-28,280],[150,-40,0],[-60,-40,-200],[-150,-27,-288]],0xE8B92F,1.2);
 cable([[40,-28,300],[-80,-20,300],[-100,-6,300]],0x888780,1.4);
 cable([[100,-28,290],[100,-10,300]],0x888780,1);
+cable([[120,-28,310],[200,-20,305],[240,-8,300]],0x888780,1);
 cable([[-100,-25,-282],[40,-15,-320],[118,-2,-300]],0x222222,1.8);
 cable([[-110,-25,-282],[-20,-12,-300],[-2,-2,-300]],0x222222,1.8);
 cable([[-92,-25,-282],[-10,-14,-296],[4,-2,-300]],0x222222,1.8);
-const LABELS=[['Lifted: acrylic squares + vinyl (top layer)',V3(175,103,-175)],['8 strip boards: one WS2812 LED + one hall sensor under every square',V3(-182,8,-125)],['4× 16-channel mux boards read all 64 sensors',V3(50,8,219)],['Raspberry Pi 4: game logic, Lichess, screen',V3(80,-14,300)],['Touchscreen driver board',V3(-130,-2,300)],['Space-bar switch',V3(100,4,300)],['Arm controller: ESP32 + 3× TMC2209 stepper drivers',V3(-130,-16,-290)],['24 V power supply',V3(170,-6,-270)],['5 V buck converter for Pi and LEDs',V3(110,-38,-150)],['Stepper cables to the 3 NEMA 17s',V3(118,4,-300)]];
+const LABELS=[['Lifted: acrylic squares + vinyl (top layer)',V3(175,103,-175)],['8 strip boards: one WS2812 LED + one hall sensor under every square',V3(-182,8,-125)],['4× 16-channel mux boards read all 64 sensors',V3(50,8,219)],['Raspberry Pi 4: game logic, Stockfish, game memory, Lichess',V3(80,-14,300)],['Touchscreen driver board',V3(-130,-2,300)],['Space-bar switch',V3(100,4,300)],['Red undo button switch',V3(240,4,300)],['Arm controller: ESP32 + 3× TMC2209 stepper drivers',V3(-130,-16,-290)],['24 V power supply',V3(170,-6,-270)],['5 V buck converter for Pi and LEDs',V3(110,-38,-150)],["Stepper cables to the arm's 3 NEMA 17s",V3(118,4,-300)]];
 elec.visible=false;let xray=false;
 
-/* touchscreen + space bar */
+/* touchscreen, space bar, red undo button */
 const scr=document.createElement('canvas');scr.width=512;scr.height=320;const sx=scr.getContext('2d');const tex=new THREE.CanvasTexture(scr);
 function screen(a,b){sx.fillStyle='#0C2F3B';sx.fillRect(0,0,512,320);sx.fillStyle='#E8F4F1';sx.font='600 54px "Chakra Petch", sans-serif';sx.textAlign='center';sx.fillText(a,256,150);sx.fillStyle='#9FD8C8';sx.font='32px "IBM Plex Sans", sans-serif';sx.fillText(b||'',256,212);tex.needsUpdate=true;}
-root.add(mesh(new THREE.BoxGeometry(160,3,104),M(0x2C2C2A),-130,1.5,300));
+root.add(mesh(B(160,3,104),M(0x2C2C2A),-130,1.5,300));
 const scrP=mesh(new THREE.PlaneGeometry(146,90),new THREE.MeshBasicMaterial({map:tex}),-130,3.2,300);scrP.rotation.x=-Math.PI/2;root.add(scrP);
-root.add(mesh(new THREE.BoxGeometry(200,6,50),M(0x444441),100,3,300));
+root.add(mesh(B(200,6,50),M(0x444441),100,3,300));
 const barMat=M(0xE8962F,{emissive:new THREE.Color(0xE8962F),emissiveIntensity:0});
-const bar=mesh(new THREE.BoxGeometry(184,10,36),barMat,100,9,300);bar.userData.bar=true;root.add(bar);
+const bar=mesh(B(184,10,36),barMat,100,9,300);bar.userData.bar=true;root.add(bar);
+root.add(mesh(C(22,24,6,32),M(0x444441),240,3,300));
+const undoMat=M(0xC0392B,{emissive:new THREE.Color(0xC0392B),emissiveIntensity:0});
+const undoBtn3=mesh(C(15,15,10,32),undoMat,240,11,300);undoBtn3.userData.cancel=true;root.add(undoBtn3);
 
 /* pieces */
 const W=M(0xF1EFE8),Bk=M(0x3A3A38);
 const lath=p=>new THREE.LatheGeometry(p.map(q=>new THREE.Vector2(q[0],q[1])),28);
 const bs=[[0,0],[16,0],[16,4],[12,7],[10,10],[12,14],[13,18]];
 const geo={p:lath(bs.concat([[12,25],[7,31],[5,34],[9,36],[9,38],[5,39],[5,41],[0,41]])),r:lath(bs.concat([[12,25],[8,32],[6.5,38],[6.5,46],[11,47],[11,58],[0,58]])),n:lath(bs.concat([[12,25],[7,33],[6,36],[10,38],[10,40],[6,41],[0,41]])),b:lath(bs.concat([[12,25],[8,33],[6,40],[10,42],[10,44],[6,45],[6,47],[0,47]])),q:lath(bs.concat([[12,28],[8,38],[6,46],[11,48],[11,50],[6,51],[7,54],[11,62],[11,64],[0,64]])),k:lath(bs.concat([[12,28],[8,40],[6,50],[11,52],[11,54],[6,55],[7,58],[10,66],[10,68],[0,68]]))};
-const g7=new THREE.SphereGeometry(7,16,10),g3=new THREE.SphereGeometry(3.5,12,8),g8=new THREE.SphereGeometry(8,16,10),gm=new THREE.BoxGeometry(5,4,5),gn=new THREE.BoxGeometry(10,18,12),gh=new THREE.BoxGeometry(9,9,18),gc1=new THREE.BoxGeometry(3,12,3),gc2=new THREE.BoxGeometry(10,3,3);
+const g7=new THREE.SphereGeometry(7,16,10),g3=new THREE.SphereGeometry(3.5,12,8),g8=new THREE.SphereGeometry(8,16,10),gm=B(5,4,5),gn=B(10,18,12),gh=B(9,9,18),gc1=B(3,12,3),gc2=B(10,3,3);
 const TOP={p:35.5,r:46.5,n:37.5,b:41.5,q:47.5,k:51.5};
 function make(t,color){const m=color==='w'?W:Bk;const g=new THREE.Group();g.add(new THREE.Mesh(geo[t],m));
   if(t==='p')g.add(mesh(g7,m,0,46,0));
@@ -285,100 +346,116 @@ function make(t,color){const m=color==='w'?W:Bk;const g=new THREE.Group();g.add(
   g.userData.type=t;g.userData.color=color;return g;}
 const slot=(color,i)=>{const side=color==='w'?-1:1;const col=i<8?0:1;return [side*(col?278:246),-150+40*(i%8)];};
 
-/* arm */
-const dark=M(0x5F5E5A),metal=M(0x888780),black=M(0x2C2C2A),light=M(0xB4B2A9),teal=M(0x5DCAA5);
-const BZ=-300,SH=120,L1=280,L2=260;
-const armHouse=mesh(new THREE.BoxGeometry(110,70,110),dark,0,35,BZ);root.add(armHouse);
-/* GT2 timing belts and pulleys: base yaw (4:1-ish), shoulder, and elbow driven from a motor at the base */
+/* shared arm parts */
+const dark=M(0x5F5E5A),metal=M(0x888780),black=M(0x2C2C2A),lightM=M(0xB4B2A9),teal=M(0x5DCAA5),screwM=M(0x9A8F78,{metalness:.5,roughness:.4});
 const beltM=M(0x1B1B1A,{roughness:0.9}),pulM=M(0xA8A7A1,{metalness:0.45,roughness:0.35});
-function pulley(r,w,axis){const g=new THREE.Group();g.add(mesh(new THREE.CylinderGeometry(r,r,w,32),pulM));
-  g.add(mesh(new THREE.CylinderGeometry(r+2.5,r+2.5,1.2,32),pulM,0,w/2,0));g.add(mesh(new THREE.CylinderGeometry(r+2.5,r+2.5,1.2,32),pulM,0,-w/2,0));
-  g.add(mesh(new THREE.CylinderGeometry(r+1,r+1,w*0.75,32),beltM));
-  g.add(mesh(new THREE.BoxGeometry(r*1.6,w+1.4,2.2),pulM));
+const BZ=-300,L1=280,L2=260;
+function pulley(r,w,axis){const g=new THREE.Group();g.add(mesh(C(r,r,w,32),pulM));
+  g.add(mesh(C(r+2.5,r+2.5,1.2,32),pulM,0,w/2,0));g.add(mesh(C(r+2.5,r+2.5,1.2,32),pulM,0,-w/2,0));
+  g.add(mesh(C(r+1,r+1,w*0.75,32),beltM));g.add(mesh(B(r*1.6,w+1.4,2.2),pulM));
   if(axis==='x')g.rotation.z=Math.PI/2;return g;}
 function belt(plane,h,c1,r1,c2,r2,w){const g=new THREE.Group();const dx=c2[0]-c1[0],dy=c2[1]-c1[1],L=Math.hypot(dx,dy),phi=Math.atan2(dy,dx),al=Math.acos((r1-r2)/L);
   [1,-1].forEach(sg=>{const a=phi+sg*al;const p1=[c1[0]+(r1+1)*Math.cos(a),c1[1]+(r1+1)*Math.sin(a)],p2=[c2[0]+(r2+1)*Math.cos(a),c2[1]+(r2+1)*Math.sin(a)];
     const ux=p2[0]-p1[0],uy=p2[1]-p1[1],len=Math.hypot(ux,uy),mx=(p1[0]+p2[0])/2,my=(p1[1]+p2[1])/2;
-    if(plane==='xz'){const b=mesh(new THREE.BoxGeometry(len,w,1.8),beltM,mx,h,my);b.rotation.y=Math.atan2(-uy,ux);g.add(b);}
-    else{const b=mesh(new THREE.BoxGeometry(w,1.8,len),beltM,h,my,mx);b.rotation.x=-Math.atan2(uy,ux);g.add(b);}});
+    if(plane==='xz'){const b=mesh(B(len,w,1.8),beltM,mx,h,my);b.rotation.y=Math.atan2(-uy,ux);g.add(b);}
+    else{const b=mesh(B(w,1.8,len),beltM,h,my,mx);b.rotation.x=-Math.atan2(uy,ux);g.add(b);}});
   return g;}
-root.add(mesh(new THREE.BoxGeometry(42,42,42),black,118,21,BZ));
-root.add(mesh(new THREE.CylinderGeometry(2.5,2.5,40,12),metal,118,62,BZ));
-const yp=pulley(9,10);yp.position.set(118,84,BZ);root.add(yp);
-root.add(belt('xz',84,[0,BZ],50,[118,BZ],9,8));
-const yawG=new THREE.Group();yawG.position.set(0,0,BZ);root.add(yawG);
-yawG.add(mesh(new THREE.CylinderGeometry(48,48,8,32),metal,0,74,0));
-const yb=pulley(50,10);yb.position.y=84;yawG.add(yb);
-yawG.add(mesh(new THREE.BoxGeometry(46,30,46),dark,0,104,0));
-const shC=mesh(new THREE.CylinderGeometry(14,14,116,20),black,0,SH,0);shC.rotation.z=Math.PI/2;yawG.add(shC);
-yawG.add(mesh(new THREE.BoxGeometry(38,38,38),black,30,110,-58));
-const sp1=pulley(7,8,'x');sp1.position.set(54,110,-58);yawG.add(sp1);
-const shP=pulley(30,8,'x');shP.position.set(54,SH,0);yawG.add(shP);
-yawG.add(belt('yz',54,[-58,110],7,[0,SH],30,7));
-yawG.add(mesh(new THREE.BoxGeometry(38,38,38),black,-30,110,-58));
-const ep1=pulley(7,8,'x');ep1.position.set(-54,110,-58);yawG.add(ep1);
-const ep2=pulley(16,8,'x');ep2.position.set(-54,SH,0);yawG.add(ep2);
-yawG.add(belt('yz',-54,[-58,110],7,[0,SH],16,7));
-const ep3=pulley(13,8,'x');ep3.position.set(-20,SH,0);yawG.add(ep3);
-const elbP=pulley(13,8,'x');yawG.add(elbP);
-const eBelt=new THREE.Group();yawG.add(eBelt);
-const eb1=mesh(new THREE.BoxGeometry(6,1.8,1),beltM),eb2=mesh(new THREE.BoxGeometry(6,1.8,1),beltM);eBelt.add(eb1);eBelt.add(eb2);
-const link1=mesh(new THREE.BoxGeometry(18,16,L1),light);yawG.add(link1);
-const link2=mesh(new THREE.BoxGeometry(14,13,L2),light);yawG.add(link2);
-const rod1=mesh(new THREE.BoxGeometry(3,3,L1),dark);yawG.add(rod1);const rod2=mesh(new THREE.BoxGeometry(3,3,L2),dark);yawG.add(rod2);
-const elb=mesh(new THREE.CylinderGeometry(11,11,40,20),black);elb.rotation.z=Math.PI/2;yawG.add(elb);
-const wr=new THREE.Group();yawG.add(wr);
 /* Jayant's gripper: rack-and-pinion parallel fingers behind the piece, flat hook jaws wrapping the neck under the collar */
-const OY=-130.5,ZB=-24;
-wr.add(mesh(new THREE.BoxGeometry(20,6,30),metal,0,-4,-12));
-wr.add(mesh(new THREE.BoxGeometry(40,4,20),metal,0,120+OY,ZB));
-wr.add(mesh(new THREE.BoxGeometry(22,20,12),black,0,108+OY,ZB));
-wr.add(mesh(new THREE.BoxGeometry(64,30,24),M(0xD3D1C7,{transparent:true,opacity:0.22,depthWrite:false}),0,83+OY,ZB));
-const rail=mesh(new THREE.CylinderGeometry(1.5,1.5,74,12),dark,0,73+OY,ZB);rail.rotation.z=Math.PI/2;wr.add(rail);
-const pin=new THREE.Group();pin.position.set(0,84+OY,ZB);
-const pc=mesh(new THREE.CylinderGeometry(6,6,6,18),light);pc.rotation.x=Math.PI/2;pin.add(pc);
-pin.add(mesh(new THREE.BoxGeometry(1.4,5,6.6),black,0,3,0));wr.add(pin);
-function ring(s,ro,ri,span,mat,top){const c=s<0?Math.PI:0,a1=c-span,a2=c+span;const sh=new THREE.Shape();sh.moveTo(ro*Math.cos(a1),ro*Math.sin(a1));sh.absarc(0,0,ro,a1,a2,false);sh.lineTo(ri*Math.cos(a2),ri*Math.sin(a2));sh.absarc(0,0,ri,a2,a1,true);
-  const m=new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:4,bevelEnabled:false,curveSegments:32}),mat);m.rotation.x=Math.PI/2;m.position.y=top;return m;}
-function hand(s){const g=new THREE.Group();
-  g.add(ring(s,13,7.5,80*Math.PI/180,dark,35.5+OY));
-  g.add(ring(s,7.6,6.6,74*Math.PI/180,teal,35.5+OY));
-  g.add(mesh(new THREE.BoxGeometry(6,4,19),dark,s*9,33.5+OY,-17.5));
-  g.add(mesh(new THREE.BoxGeometry(6,41.5,6),dark,s*9,52.25+OY,ZB));
-  g.add(mesh(new THREE.BoxGeometry(14,6,14),M(0x444441),s*11,73+OY,ZB));return g;}
-const hL=hand(-1),hR=hand(1);
-hL.add(mesh(new THREE.BoxGeometry(34,3,6),metal,-4,91.5+OY,ZB));hL.add(mesh(new THREE.BoxGeometry(3,17,4),metal,-13,83+OY,ZB));
-hR.add(mesh(new THREE.BoxGeometry(34,3,6),metal,4,76.5+OY,ZB));hR.add(mesh(new THREE.BoxGeometry(3,4,4),metal,13,76+OY,ZB));
-wr.add(hL);wr.add(hR);
-function setArm(tx,ty,tz,d){const dx=tx,dz=tz-BZ;const yaw=Math.atan2(dx,dz);const r=Math.hypot(dx,dz);const dy=ty-SH;const D=Math.min(Math.hypot(r,dy),L1+L2-1);
-  const a1=Math.atan2(dy,r)+Math.acos(Math.max(-1,Math.min(1,(L1*L1+D*D-L2*L2)/(2*L1*D))));const ex=L1*Math.cos(a1),ey=L1*Math.sin(a1);const a2=Math.atan2(dy-ey,r-ex);
-  yawG.rotation.y=yaw;
-  link1.position.set(0,SH+ey/2,ex/2);link1.rotation.x=-a1;rod1.position.set(14,SH+ey/2-12,ex/2);rod1.rotation.x=-a1;
-  link2.position.set(0,SH+ey+(dy-ey)/2,ex+(r-ex)/2);link2.rotation.x=-a2;rod2.position.set(14,SH+ey+(dy-ey)/2-12,ex+(r-ex)/2);rod2.rotation.x=-a2;
-  elb.position.set(0,SH+ey,ex);wr.position.set(0,ty,r);hL.position.x=-d;hR.position.x=d;pin.rotation.z=d/6;
-  shP.rotation.x=-a1;ep2.rotation.x=-a2*1.5;ep3.rotation.x=-a2*1.5;
-  eBelt.position.set(-20,SH+ey/2,ex/2);eBelt.rotation.x=-a1;eb1.scale.z=L1;eb2.scale.z=L1;eb1.position.y=14;eb2.position.y=-14;
-  elbP.position.set(-20,SH+ey,ex);elbP.rotation.x=-a2;
-  yb.rotation.y=0;yp.rotation.y=-yaw*5.5;}
+function gripper(wr){const OY=-130.5,ZB=-24;
+  wr.add(mesh(B(20,6,30),metal,0,-4,-12));wr.add(mesh(B(40,4,20),metal,0,120+OY,ZB));wr.add(mesh(B(22,20,12),black,0,108+OY,ZB));
+  wr.add(mesh(B(64,30,24),M(0xD3D1C7,{transparent:true,opacity:0.22,depthWrite:false}),0,83+OY,ZB));
+  const rail=mesh(C(1.5,1.5,74,12),dark,0,73+OY,ZB);rail.rotation.z=Math.PI/2;wr.add(rail);
+  const pin=new THREE.Group();pin.position.set(0,84+OY,ZB);const pc=mesh(C(6,6,6,18),lightM);pc.rotation.x=Math.PI/2;pin.add(pc);pin.add(mesh(B(1.4,5,6.6),black,0,3,0));wr.add(pin);
+  function ring(s,ro,ri,span,mat,top){const c=s<0?Math.PI:0,a1=c-span,a2=c+span;const sh=new THREE.Shape();sh.moveTo(ro*Math.cos(a1),ro*Math.sin(a1));sh.absarc(0,0,ro,a1,a2,false);sh.lineTo(ri*Math.cos(a2),ri*Math.sin(a2));sh.absarc(0,0,ri,a2,a1,true);
+    const m=new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:4,bevelEnabled:false,curveSegments:32}),mat);m.rotation.x=Math.PI/2;m.position.y=top;return m;}
+  function hand(s){const g=new THREE.Group();g.add(ring(s,13,7.5,80*Math.PI/180,dark,35.5+OY));g.add(ring(s,7.6,6.6,74*Math.PI/180,teal,35.5+OY));
+    g.add(mesh(B(6,4,19),dark,s*9,33.5+OY,-17.5));g.add(mesh(B(6,41.5,6),dark,s*9,52.25+OY,ZB));g.add(mesh(B(14,6,14),M(0x444441),s*11,73+OY,ZB));return g;}
+  const hL=hand(-1),hR=hand(1);
+  hL.add(mesh(B(34,3,6),metal,-4,91.5+OY,ZB));hL.add(mesh(B(3,17,4),metal,-13,83+OY,ZB));
+  hR.add(mesh(B(34,3,6),metal,4,76.5+OY,ZB));hR.add(mesh(B(3,4,4),metal,13,76+OY,ZB));
+  wr.add(hL);wr.add(hR);
+  return d=>{hL.position.x=-d;hR.position.x=d;pin.rotation.z=d/6;};}
+
+let armRoot=null,setArm=()=>{},armType='articulated';
+function freshArm(){if(armRoot)root.remove(armRoot);armRoot=new THREE.Group();armRoot.visible=!xray;root.add(armRoot);return armRoot;}
+
+/* articulated arm: base yaw, shoulder and elbow on GT2 belts, all three NEMA 17s at the base, parallelogram rods keep the wrist level */
+function buildArticulated(){const A=freshArm();const SH=120;
+  A.add(mesh(B(110,70,110),dark,0,35,BZ));
+  A.add(mesh(B(42,42,42),black,118,21,BZ));A.add(mesh(C(2.5,2.5,40,12),metal,118,62,BZ));
+  const yp=pulley(9,10);yp.position.set(118,84,BZ);A.add(yp);A.add(belt('xz',84,[0,BZ],50,[118,BZ],9,8));
+  const yawG=new THREE.Group();yawG.position.set(0,0,BZ);A.add(yawG);
+  yawG.add(mesh(C(48,48,8,32),metal,0,74,0));const yb=pulley(50,10);yb.position.y=84;yawG.add(yb);
+  yawG.add(mesh(B(46,30,46),dark,0,104,0));
+  const shC=mesh(C(14,14,116,20),black,0,SH,0);shC.rotation.z=Math.PI/2;yawG.add(shC);
+  yawG.add(mesh(B(38,38,38),black,30,110,-58));const sp1=pulley(7,8,'x');sp1.position.set(54,110,-58);yawG.add(sp1);
+  const shP=pulley(30,8,'x');shP.position.set(54,SH,0);yawG.add(shP);yawG.add(belt('yz',54,[-58,110],7,[0,SH],30,7));
+  yawG.add(mesh(B(38,38,38),black,-30,110,-58));const ep1=pulley(7,8,'x');ep1.position.set(-54,110,-58);yawG.add(ep1);
+  const ep2=pulley(16,8,'x');ep2.position.set(-54,SH,0);yawG.add(ep2);yawG.add(belt('yz',-54,[-58,110],7,[0,SH],16,7));
+  const ep3=pulley(13,8,'x');ep3.position.set(-20,SH,0);yawG.add(ep3);
+  const elbP=pulley(13,8,'x');yawG.add(elbP);
+  const eBelt=new THREE.Group();yawG.add(eBelt);const eb1=mesh(B(6,1.8,1),beltM),eb2=mesh(B(6,1.8,1),beltM);eBelt.add(eb1);eBelt.add(eb2);
+  const link1=mesh(B(18,16,L1),lightM);yawG.add(link1);const link2=mesh(B(14,13,L2),lightM);yawG.add(link2);
+  const rod1=mesh(B(3,3,L1),dark);yawG.add(rod1);const rod2=mesh(B(3,3,L2),dark);yawG.add(rod2);
+  const elb=mesh(C(11,11,40,20),black);elb.rotation.z=Math.PI/2;yawG.add(elb);
+  const wr=new THREE.Group();yawG.add(wr);const grip=gripper(wr);
+  setArm=(tx,ty,tz,d)=>{const dx=tx,dz=tz-BZ;const yaw=Math.atan2(dx,dz);const r=Math.hypot(dx,dz);const dy=ty-SH;const D=Math.min(Math.hypot(r,dy),L1+L2-1);
+    const a1=Math.atan2(dy,r)+Math.acos(Math.max(-1,Math.min(1,(L1*L1+D*D-L2*L2)/(2*L1*D))));const ex=L1*Math.cos(a1),ey=L1*Math.sin(a1);const a2=Math.atan2(dy-ey,r-ex);
+    yawG.rotation.y=yaw;
+    link1.position.set(0,SH+ey/2,ex/2);link1.rotation.x=-a1;rod1.position.set(14,SH+ey/2-12,ex/2);rod1.rotation.x=-a1;
+    link2.position.set(0,SH+ey+(dy-ey)/2,ex+(r-ex)/2);link2.rotation.x=-a2;rod2.position.set(14,SH+ey+(dy-ey)/2-12,ex+(r-ex)/2);rod2.rotation.x=-a2;
+    elb.position.set(0,SH+ey,ex);wr.position.set(0,ty,r);grip(d);
+    shP.rotation.x=-a1;ep2.rotation.x=-a2*1.5;ep3.rotation.x=-a2*1.5;
+    eBelt.position.set(-20,SH+ey/2,ex/2);eBelt.rotation.x=-a1;eb1.scale.z=L1;eb2.scale.z=L1;eb1.position.y=14;eb2.position.y=-14;
+    elbP.position.set(-20,SH+ey,ex);elbP.rotation.x=-a2;yp.rotation.y=-yaw*5.5;};}
+
+/* SCARA arm: shoulder and elbow swing flat, a lead screw lifts the whole arm, a roll servo keeps the gripper square to the board */
+function buildScara(){const A=freshArm();const LA=34;
+  A.add(mesh(B(110,70,110),dark,0,35,BZ));
+  A.add(mesh(B(42,42,42),black,118,21,BZ));A.add(mesh(C(2.5,2.5,40,12),metal,118,62,BZ));
+  const yp=pulley(9,10);yp.position.set(118,84,BZ);A.add(yp);A.add(belt('xz',84,[0,BZ],50,[118,BZ],9,8));
+  const yawG=new THREE.Group();yawG.position.set(0,0,BZ);A.add(yawG);
+  yawG.add(mesh(C(48,48,8,32),metal,0,74,0));const yb=pulley(50,10);yb.position.y=84;yawG.add(yb);
+  yawG.add(mesh(B(76,16,70),dark,0,98,-10));
+  [-24,24].forEach(x=>yawG.add(mesh(C(4,4,306,16),pulM,x,257,0)));
+  const lead=mesh(C(4,4,306,16),screwM,0,257,-30);yawG.add(lead);
+  for(let y=110;y<410;y+=6)lead.add(mesh(C(4.8,4.8,1.2,16),screwM,0,y-257,0));
+  yawG.add(mesh(B(76,8,70),dark,0,414,-10));yawG.add(mesh(B(42,42,42),black,0,439,-30));
+  const armZ=new THREE.Group();yawG.add(armZ);
+  armZ.add(mesh(B(70,46,44),lightM,0,0,-4));armZ.add(mesh(B(22,22,16),black,0,0,-30));
+  armZ.add(mesh(B(30,14,L1+20),lightM,0,0,L1/2));armZ.add(mesh(B(42,42,42),black,0,-28,60));
+  const ep1=pulley(7,8);ep1.position.set(0,13,60);armZ.add(ep1);armZ.add(belt('xz',13,[0,60],7,[0,L1],26,6));
+  const elbowG=new THREE.Group();elbowG.position.set(0,0,L1);armZ.add(elbowG);
+  elbowG.add(mesh(C(16,16,36,24),black,0,-3,0));const ep2=pulley(26,8);ep2.position.y=13;elbowG.add(ep2);
+  elbowG.add(mesh(B(24,12,L2+16),lightM,0,-14,L2/2));elbowG.add(mesh(B(30,22,32),black,0,-14,L2));elbowG.add(mesh(C(6,6,12,16),metal,0,-30,L2));
+  const wr=new THREE.Group();wr.position.set(0,-LA,L2);elbowG.add(wr);const grip=gripper(wr);
+  setArm=(tx,ty,tz,d)=>{const dx=tx,dz=tz-BZ;const phi=Math.atan2(dx,dz);const r=Math.max(Math.abs(L1-L2)+2,Math.min(L1+L2-2,Math.hypot(dx,dz)));
+    const q2=Math.acos(Math.max(-1,Math.min(1,(r*r-L1*L1-L2*L2)/(2*L1*L2))));const q1=phi-Math.atan2(L2*Math.sin(q2),L1+L2*Math.cos(q2));
+    const zc=ty+LA;yawG.rotation.y=q1;armZ.position.y=zc;elbowG.rotation.y=q2;wr.rotation.y=-(q1+q2);grip(d);
+    lead.rotation.y=zc*0.4;yp.rotation.y=-q1*5.5;ep1.rotation.y=-q2*3.7;};}
+
+const ARM_NOTES={
+  articulated:['Why an articulated arm','It reaches over the board the way a person does, which reads as an opponent sitting across from you on camera. Three NEMA 17s at the base drive yaw, shoulder and elbow through GT2 belts, and parallelogram rods keep the gripper level. The trade-off: the shoulder holds the arm up against gravity, so hitting ±1.5 mm takes more tuning.'],
+  scara:['Why a SCARA','Shoulder and elbow swing in a flat plane, so gravity never loads those joints and there is no shoulder sag at full reach. A lead screw on the column lifts the whole arm, and a roll servo at the wrist keeps the gripper square to the board. Same 280 mm and 260 mm links, so it reaches every square and both trays. It looks more like a machine than a person.']};
+
 const REST=[0,250,-170],CRUISE=262;
 let arm={x:REST[0],y:REST[1],z:REST[2],d:10},carry=null,steps=[],cur=null,speed=2;
 
-/* game */
+/* game state */
 const game=new Chess();
 let pieces={},grave=[],state='user',selected=null,targets=[],lastUser=null,lastBot=null,level=1;
+let flash=null,hint=null;
 
 function resync(){
   Object.values(pieces).forEach(p=>root.remove(p));grave.forEach(p=>root.remove(p));pieces={};grave=[];
   const b=game.board();
   for(let i=0;i<8;i++)for(let j=0;j<8;j++){const p=b[i][j];if(!p)continue;const sq=FILES[j]+(8-i);const g=make(p.type,p.color);const [x,z]=sqXZ(sq);g.position.set(x,14,z);g.userData.sq=sq;root.add(g);pieces[sq]=g;}
   const cnt={w:0,b:0};
-  game.history({verbose:true}).forEach(m=>{if(!m.captured)return;const c=m.color==='w'?'b':'w';const g=make(m.captured,c);const [x,z]=slot(c,cnt[c]++);g.position.set(x,4,z);root.add(g);grave.push(g);});
-  if(typeof xray!=='undefined'&&xray)Object.values(pieces).concat(grave).forEach(g=>{g.visible=false;});
+  game.history({verbose:true}).forEach(m=>{if(!m.captured)return;const c=m.color==='w'?'b':'w';const g=make(m.captured,c);const [x,z]=slot(c,cnt[c]++);g.position.set(x,4,z);g.userData.slot=c+(cnt[c]-1);root.add(g);grave.push(g);});
+  if(xray)Object.values(pieces).concat(grave).forEach(g=>{g.visible=false;});
 }
-
 function kingSq(color){const b=game.board();for(let i=0;i<8;i++)for(let j=0;j<8;j++){const p=b[i][j];if(p&&p.type==='k'&&p.color===color)return FILES[j]+(8-i);}return null;}
 function lit(sq,c,k){const m=sqMat[sq];if(!m)return;m.color.set(c);m.emissive.set(c);m.emissiveIntensity=k;const l=ledMat[sq];if(l){l.emissive.set(c);l.emissiveIntensity=1.2;}}
-let flash=null;
 function lights(){
   Object.values(sqMat).forEach(m=>{m.color.set(m.userData.base);m.emissive.set(0);m.emissiveIntensity=0;});
   Object.values(ledMat).forEach(l=>{l.emissive.set(0x2A2A2A);l.emissiveIntensity=1;});
@@ -387,16 +464,17 @@ function lights(){
   if(lastBot){lit(lastBot.from,0xE8962F,0.35);lit(lastBot.to,0xE8962F,0.35);}
   if(selected){lit(selected,0x2E9E48,0.55);targets.forEach(t=>lit(t,0x52D16E,0.38));}
   if(game.in_check()){const k=kingSq(game.turn());if(k)lit(k,0xE0453C,0.5);}
+  if(hint)hint.sqs.forEach(s=>lit(s,0x3B7DD8,0.6));
   if(flash)lit(flash.sq,0xE0453C,0.7);
   barMat.emissiveIntensity=state==='pending'?0.35:0;
+  undoMat.emissiveIntensity=canUndo()?0.3:0;
 }
 
-/* engine */
+/* built-in engine, used only if Stockfish can't load */
 const VAL={p:100,n:320,b:330,r:500,q:900,k:0};
 function evalBoard(){let s=0;const b=game.board();for(let i=0;i<8;i++)for(let j=0;j<8;j++){const p=b[i][j];if(!p)continue;let v=VAL[p.type];
   if(p.type==='p')v+=(p.color==='w'?6-i:i-1)*8;
   if(p.type==='n'||p.type==='b'){v+=(7-(Math.abs(3.5-j)+Math.abs(3.5-i)))*4;}
-  if(p.type==='k'&&game.history().length<40)v+=(p.color==='b'?(i===0?15:0):(i===7?15:0));
   s+=p.color==='b'?v:-v;}return s;}
 function search(depth,alpha,beta,max){
   if(game.in_checkmate())return max?-100000-depth:100000+depth;
@@ -405,11 +483,71 @@ function search(depth,alpha,beta,max){
   const ms=game.moves();ms.sort((a,b)=>(b.includes('x')?1:0)-(a.includes('x')?1:0));
   if(max){let best=-Infinity;for(const m of ms){game.move(m);best=Math.max(best,search(depth-1,alpha,beta,false));game.undo();alpha=Math.max(alpha,best);if(beta<=alpha)break;}return best;}
   let best=Infinity;for(const m of ms){game.move(m);best=Math.min(best,search(depth-1,alpha,beta,true));game.undo();beta=Math.min(beta,best);if(beta<=alpha)break;}return best;}
-function pickMove(){
-  const ms=game.moves();const noise=level===1?60:level===2?8:2;let best=null,bv=-Infinity;
-  ms.sort(()=>Math.random()-0.5);
-  for(const m of ms){game.move(m);const v=search(level-1,-Infinity,Infinity,false)+Math.random()*noise;game.undo();if(v>bv){bv=v;best=m;}}
-  return best;}
+function pickMove(){const ms=game.moves();const noise=level===1?60:level===2?8:2;let best=null,bv=-Infinity;ms.sort(()=>Math.random()-0.5);
+  for(const m of ms){game.move(m);const v=search(level-1,-Infinity,Infinity,false)+Math.random()*noise;game.undo();if(v>bv){bv=v;best=m;}}return best;}
+
+/* Stockfish in a web worker */
+let SF=null,sfReady=false,sfFailed=false,sfQueue=[],sfJob=null;
+const LEVELS={1:{skill:1,depth:4},2:{skill:8,depth:8},3:{skill:18,depth:12}};
+const COACH_DEPTH=11;
+function engineLabel(){$('engineLbl').textContent=sfReady?'Engine: Stockfish 10, the same engine the Pi runs.':sfFailed?"Engine: built-in. Stockfish couldn't load in this browser, so the coach is paused.":'Engine: loading Stockfish…';}
+function startSF(){
+  try{const src="importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');";
+    SF=new Worker(URL.createObjectURL(new Blob([src],{type:'application/javascript'})));
+    SF.onmessage=e=>onSF(String(e.data));SF.onerror=()=>{if(!sfReady){sfFailed=true;engineLabel();renderCoach();}};
+    SF.postMessage('uci');
+    setTimeout(()=>{if(!sfReady){sfFailed=true;engineLabel();renderCoach();}},8000);
+  }catch(e){sfFailed=true;engineLabel();}}
+function onSF(line){
+  if(line==='uciok'){SF.postMessage('isready');return;}
+  if(line==='readyok'&&!sfReady){sfReady=true;sfFailed=false;engineLabel();if(state==='user')prefetch();pump();return;}
+  if(!sfJob)return;
+  if(line.startsWith('info')&&line.includes(' score ')){const cp=line.match(/ score cp (-?\d+)/),mt=line.match(/ score mate (-?\d+)/);
+    if(cp)sfJob.score=+cp[1];else if(mt){const n=+mt[1];sfJob.score=n>0?20000-n:-20000-n;}}
+  if(line.startsWith('bestmove')){const j=sfJob;sfJob=null;j.resolve({best:line.split(' ')[1],score:j.score==null?0:j.score});pump();}}
+function pump(){if(sfJob||!sfReady||!sfQueue.length)return;sfJob=sfQueue.shift();
+  SF.postMessage('setoption name Skill Level value '+sfJob.skill);SF.postMessage('position fen '+sfJob.fen);SF.postMessage('go depth '+sfJob.depth);}
+function sfRun(fen,skill,depth){return new Promise(res=>{sfQueue.push({fen,skill,depth,resolve:res,score:null});pump();});}
+function uciToSan(fen,u){try{const c=new Chess(fen);const m=c.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]||'q'});return m?m.san:u;}catch(e){return u;}}
+
+/* coach + memory */
+let coachOn=true,pre=null,prePromise=null,verdicts=[],lastEval=null,hintsUsed=0,saved=false;
+const CLS={best:['Best','!'],good:['Good','✓'],inacc:['Inaccuracy','?!'],mistake:['Mistake','?'],blunder:['Blunder','??']};
+const clampE=s=>Math.max(-1500,Math.min(1500,s));
+function prefetch(){pre=null;prePromise=null;if(!coachOn||!sfReady||state!=='user')return;const fen=game.fen();
+  prePromise=sfRun(fen,20,COACH_DEPTH).then(r=>{if(game.fen()===fen||state==='pending'){pre={fen,scoreW:r.score,best:r.best,bestSan:uciToSan(fen,r.best)};lastEval=r.score;renderCoach();}});}
+async function coachRate(uIdx){
+  if(!coachOn||!sfReady)return;
+  try{if(prePromise)await prePromise;if(!pre)return;
+    const h=game.history({verbose:true});const mv=h[h.length-1];const played=mv.from+mv.to+(mv.promotion||'');
+    let after;if(game.in_checkmate())after=20000;else{const r=await sfRun(game.fen(),20,COACH_DEPTH);after=-r.score;}
+    const loss=Math.max(0,clampE(pre.scoreW)-clampE(after));
+    const cls=played===pre.best.slice(0,played.length)&&pre.best.startsWith(mv.from+mv.to)?'best':loss<=40?'good':loss<=100?'inacc':loss<=250?'mistake':'blunder';
+    verdicts[uIdx]={cls,loss,san:mv.san,bestSan:pre.bestSan};lastEval=after;renderCoach(uIdx);movesUI();
+  }catch(e){}}
+function renderCoach(uIdx){
+  const fill=$('evalFill'),txt=$('evalTxt');
+  if(lastEval==null){fill.style.width='50%';txt.textContent=sfFailed?'Coach paused: Stockfish not available here.':'Even position';}
+  else{const e=clampE(lastEval);fill.style.width=(50+Math.max(-48,Math.min(48,e/12)))+'%';
+    const p=Math.abs(lastEval)>=19000?'Mate in '+(20000-Math.abs(lastEval)):(Math.abs(e)/100).toFixed(1)+' pawns';
+    txt.textContent=Math.abs(e)<30?'Roughly equal':(e>0?'White (you) ahead by ':'Black ahead by ')+p;}
+  const v=uIdx!=null?verdicts[uIdx]:null,el=$('verdict');
+  if(!coachOn){el.textContent='Coach is off.';}
+  else if(v){const lost=(v.loss/100).toFixed(1);
+    el.innerHTML='';const b=document.createElement('b');b.textContent=CLS[v.cls][0]+': '+v.san+'. ';el.appendChild(b);
+    el.appendChild(document.createTextNode(v.cls==='best'?"That's Stockfish's top choice.":v.cls==='good'?`Solid. Stockfish's pick was ${v.bestSan}.`:`That cost about ${lost} pawns. Stockfish preferred ${v.bestSan}.`));}
+  $('hintBtn').disabled=!(coachOn&&pre&&state==='user');}
+function accuracy(){const v=verdicts.filter(Boolean);if(!v.length)return null;return Math.round(v.reduce((a,x)=>a+Math.max(0,100-x.loss*0.4),0)/v.length);}
+function loadGames(){try{return JSON.parse(localStorage.getItem('att-games-v1')||'[]');}catch(e){return [];}}
+function saveGame(result){if(saved)return;const n=game.history().length;if(n<2)return;saved=true;
+  const v=verdicts.filter(Boolean);const g={d:new Date().toISOString(),res:result,moves:Math.ceil(n/2),acc:accuracy(),bl:v.filter(x=>x.cls==='blunder').length,mi:v.filter(x=>x.cls==='mistake').length,arm:armType,pgn:game.pgn()};
+  const list=loadGames();list.push(g);try{localStorage.setItem('att-games-v1',JSON.stringify(list.slice(-30)));}catch(e){}renderPast();}
+function renderPast(){const list=loadGames(),ul=$('past');ul.innerHTML='';
+  if(!list.length){const li=document.createElement('li');li.innerHTML='<span>No games stored yet. Finished games land here, like on the Pi\'s SD card.</span>';ul.appendChild(li);$('trend').textContent='';return;}
+  list.slice(-5).reverse().forEach(g=>{const li=document.createElement('li');const r=document.createElement('span');r.className='r '+(g.res==='Win'?'win':g.res==='Loss'?'loss':'');r.textContent=g.res;
+    const s=document.createElement('span');s.textContent=`${g.moves} moves · ${g.acc==null?'–':g.acc+'%'} · ${g.bl} blunder${g.bl===1?'':'s'}`;li.append(r,s);ul.appendChild(li);});
+  const last=list.slice(-5).filter(g=>g.acc!=null);
+  $('trend').textContent=last.length>=2?`Blunders over your last ${last.length} games: ${last.map(g=>g.bl).join(' → ')}. Accuracy: ${last.map(g=>g.acc+'%').join(' → ')}.`:'Play a few games and the trend shows up here.';}
 
 /* arm steps */
 const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
@@ -421,29 +559,33 @@ function pickPlace(g,fromXZ,fromY,toXZ,toY,label){const t=g.userData.type,top=TO
     go(fromXZ[0],CRUISE,fromXZ[1],0),go(toXZ[0],CRUISE,toXZ[1],0),go(toXZ[0],py,toXZ[1],0),go(toXZ[0],py,toXZ[1],10),act(()=>{carry=null;g.position.set(toXZ[0],toY,toXZ[1]);}),go(toXZ[0],CRUISE,toXZ[1],10)];}
 
 /* panel */
-const $=id=>document.getElementById(id);
 const NAMES={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
 function setPanel(a,b,mode){$('turn').textContent=a;$('sub').textContent=b||'';const p=$('pill');p.className='pill '+(mode==='you'?'you':mode==='bot'?'bot':'over');p.textContent=mode==='you'?'Your turn':mode==='bot'?'Opponent':'Game over';}
 function movesUI(){const h=game.history();const el=$('moves');el.innerHTML='';$('movesEmpty').hidden=h.length>0;
-  for(let i=0;i<h.length;i+=2){const n=document.createElement('span');n.className='n';n.textContent=(i/2+1)+'.';const a=document.createElement('span');a.textContent=h[i];const b=document.createElement('span');b.textContent=h[i+1]||'';el.append(n,a,b);}
+  for(let i=0;i<h.length;i+=2){const n=document.createElement('span');n.className='n';n.textContent=(i/2+1)+'.';const a=document.createElement('span');a.textContent=h[i];
+    const v=verdicts[i/2];if(v){const t=document.createElement('span');t.className='v v-'+v.cls;t.textContent=CLS[v.cls][1];t.title=CLS[v.cls][0];a.appendChild(t);}
+    const b=document.createElement('span');b.textContent=h[i+1]||'';el.append(n,a,b);}
   el.scrollTop=el.scrollHeight;}
-function ui(){$('spaceBtn').disabled=state!=='pending';$('undoBtn').disabled=state!=='pending';$('floatbar').hidden=state!=='pending';$('hint').hidden=(typeof xray!=='undefined'&&xray)||state==='pending';movesUI();lights();}
+function canUndo(){return state==='pending'||(state==='user'&&game.history().length>=2)||(state==='over'&&game.history().length>=1&&game.turn()==='b');}
+function ui(){const p=state==='pending';$('spaceBtn').disabled=!p;$('undoBtn').disabled=!canUndo();$('floatbar').hidden=!p;$('hint').hidden=xray||p;
+  $('undoNote').textContent=p?'Red button: cancel this move before it is sent.':'Red button: take back the last move pair. The arm reverses its own move.';
+  movesUI();lights();renderCoach(verdicts.length?verdicts.length-1:null);}
 function overText(){if(game.in_checkmate())return game.turn()==='b'?['Checkmate','You win. Press New game to play again.']:['Checkmate','The opponent wins this one.'];
   if(game.in_stalemate())return ['Stalemate','Draw. Press New game to play again.'];return ['Draw','Press New game to play again.'];}
 function userTurnText(){if(lastBot){const s=`Opponent played ${lastBot.san}.`;return game.in_check()?['Check',s+' Your king is attacked.']:['Your move',s+' Pick up a piece.'];}return ['Your move','You play white. Pick up a piece by clicking it.'];}
-function toUser(){if(game.game_over()){state='over';const t=overText();screen(t[0],t[1]);setPanel(t[0],t[1],'over');}else{state='user';const t=userTurnText();screen(t[0],t[1]);setPanel(t[0],t[1],'you');}ui();}
+function toUser(){if(game.game_over()){state='over';const t=overText();screen(t[0],t[1]);setPanel(t[0],t[1],'over');saveGame(game.in_checkmate()?(game.turn()==='b'?'Win':'Loss'):'Draw');}
+  else{state='user';const t=userTurnText();screen(t[0],t[1]);setPanel(t[0],t[1],'you');prefetch();}ui();}
 
 /* user input */
 function clickSquare(sq){
   if(state!=='user')return;
   if(selected&&targets.includes(sq)){
-    const res=game.move({from:selected,to:sq,promotion:'q'});selected=null;targets=[];
+    const res=game.move({from:selected,to:sq,promotion:'q'});selected=null;targets=[];hint=null;
     if(!res){ui();return;}
     lastUser={from:res.from,to:res.to,san:res.san};state='pending';resync();
     const extra=res.flags.includes('p')?' Promoted to a queen.':res.captured?` You took the ${NAMES[res.captured]} to the tray.`:'';
-    screen('Send '+res.from+'-'+res.to+'?','Press the space bar');setPanel('Press the space bar',`You moved ${res.san}.${extra} Take back is still allowed.`,'you');ui();return;}
-  const p=game.get(sq);
-  const now=performance.now();
+    screen('Send '+res.from+'-'+res.to+'?','Space to send · red to cancel');setPanel('Press the space bar',`You moved ${res.san}.${extra} The red button cancels it.`,'you');ui();return;}
+  const p=game.get(sq);const now=performance.now();
   if(p&&p.color==='w'){selected=sq;targets=game.moves({square:sq,verbose:true}).map(m=>m.to);
     if(!targets.length){flash={sq,until:now+900};setPanel('No legal moves','That piece is blocked, so its square flashes red. Try another.','you');}
     else setPanel('Piece lifted',`Green squares are legal for this ${NAMES[p.type]}. Any other square flashes red.`,'you');}
@@ -451,15 +593,18 @@ function clickSquare(sq){
   else if(p){flash={sq,until:now+900};setPanel('Not your piece','You play white. That square flashes red.','you');}
   else{selected=null;targets=[];}
   lights();}
+function pressMesh(m,y){m.position.y=y-3;setTimeout(()=>{m.position.y=y;},180);}
 function commit(){
   if(state!=='pending')return;
-  state='bot';ui();
-  bar.position.y=6;setTimeout(()=>{bar.position.y=9;},180);
-  if(game.game_over()){toUser();return;}
+  state='bot';ui();pressMesh(bar,9);
+  const uIdx=Math.floor((game.history().length-1)/2);
   screen('Move sent','Opponent thinking...');setPanel('Move sent','Waiting for the opponent. On the real board this is the Lichess Board API.','bot');
-  setTimeout(robotMove,450);}
-function robotMove(){
-  const san=pickMove();const res=game.move(san);lastBot={from:res.from,to:res.to,san:res.san};lights();
+  setTimeout(async()=>{await coachRate(uIdx);if(game.game_over()){toUser();return;}robotMove();},250);}
+async function robotMove(){
+  const fen=game.fen();let res=null;
+  if(sfReady){try{const lv=LEVELS[level];const r=await sfRun(fen,lv.skill,lv.depth);if(r.best&&r.best!=='(none)')res=game.move({from:r.best.slice(0,2),to:r.best.slice(2,4),promotion:r.best[4]||'q'});}catch(e){}}
+  if(!res)res=game.move(pickMove());
+  lastBot={from:res.from,to:res.to,san:res.san};lights();
   const mover=pieces[res.from];const s=[];
   s.push(say('Opponent: '+res.from+'-'+res.to,`Played ${res.san}. The arm is making the move.`));
   if(res.captured){const capSq=res.flags.includes('e')?res.to[0]+res.from[1]:res.to;const cg=pieces[capSq];
@@ -470,6 +615,25 @@ function robotMove(){
   if(res.flags.includes('p'))s.push(say('Promotion','The pawn becomes a queen. On the real board a spare queen is swapped in.'),act(null,500));
   s.push(go(REST[0],REST[1],REST[2],10),act(()=>{resync();toUser();}));
   steps.push(...s);}
+function takeBack(){if(state!=='pending')return;game.undo();lastUser=null;state='user';resync();const t=userTurnText();screen(t[0],t[1]);setPanel('Move cancelled','Your piece is back. Pick up a piece and try another move.','you');prefetch();ui();}
+function undoPair(){
+  const h=game.history({verbose:true});
+  if(state==='over'&&game.turn()==='b'){game.undo();verdicts.length=Math.ceil(game.history().length/2);saved=false;lastUser=null;resync();toUser();setPanel('Undone','Your last move is taken back. Try something else.','you');return;}
+  if(state!=='user'||h.length<2)return;
+  const mb=h[h.length-1],mu=h[h.length-2];state='bot';selected=null;targets=[];hint=null;ui();
+  const s=[say('Undo','Reversing the opponent\'s '+mb.san+'.')];
+  s.push(...pickPlace(pieces[mb.to],sqXZ(mb.to),14,sqXZ(mb.from),14,null));
+  if(mb.flags.includes('k')||mb.flags.includes('q')){const ks=mb.flags.includes('k');const rf=ks?'f8':'d8',rt=ks?'h8':'a8';if(pieces[rf])s.push(...pickPlace(pieces[rf],sqXZ(rf),14,sqXZ(rt),14,null));}
+  if(mb.captured){const capSq=mb.flags.includes('e')?mb.to[0]+mb.from[1]:mb.to;const idx=h.filter(m=>m.captured&&m.color==='b').length-1;const g=grave.find(x=>x.userData.slot==='w'+idx);
+    if(g)s.push(...pickPlace(g,slot('w',idx),4,sqXZ(capSq),14,['Undo','Bringing your '+NAMES[mb.captured]+' back from the tray.']));}
+  s.push(go(REST[0],REST[1],REST[2],10),act(()=>{game.undo();game.undo();verdicts.length=Math.floor(game.history().length/2);
+    const hh=game.history({verbose:true});const pb=hh.length?hh[hh.length-1]:null;lastBot=pb&&pb.color==='b'?{from:pb.from,to:pb.to,san:pb.san}:null;lastUser=null;resync();
+    state='user';hint={sqs:[mu.from],until:performance.now()+3500};
+    screen('Undone','Put your '+NAMES[mu.piece]+' back on '+mu.from);setPanel('Undone',`The arm reversed ${mb.san}. Put your ${NAMES[mu.piece]} back on ${mu.from}; the blue square shows where. Online, this is sent as a takeback request.`,'you');prefetch();ui();}));
+  steps.push(...s);}
+function onUndo(){pressMesh(undoBtn3,11);if(state==='pending')takeBack();else undoPair();}
+function showHint(){if(!pre||state!=='user')return;hint={sqs:[pre.best.slice(0,2),pre.best.slice(2,4)],until:performance.now()+3500};hintsUsed++;
+  setPanel('Hint',`Stockfish suggests ${pre.bestSan}. The two blue squares show it.`,'you');lights();}
 
 /* camera */
 const target=new THREE.Vector3(0,30,-40);
@@ -489,29 +653,44 @@ view.addEventListener('wheel',e=>{e.preventDefault();tR=Math.max(650,Math.min(20
 const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();
 function pick(e){const r=cv.getBoundingClientRect();mouse.x=((e.clientX-r.left)/r.width)*2-1;mouse.y=-((e.clientY-r.top)/r.height)*2+1;ray.setFromCamera(mouse,cam);
   const hits=ray.intersectObjects(root.children,true);
-  for(const h of hits){let o=h.object;while(o&&o!==root){if(o.userData.bar){commit();return;}if(o.userData.sq){clickSquare(o.userData.sq);return;}o=o.parent;}}}
+  for(const h of hits){let o=h.object;while(o&&o!==root){if(o.userData.bar){commit();return;}if(o.userData.cancel){onUndo();return;}if(o.userData.sq){clickSquare(o.userData.sq);return;}o=o.parent;}}}
 
 /* controls */
-$('spaceBtn').addEventListener('click',commit);
-function takeBack(){if(state!=='pending')return;game.undo();lastUser=null;state='user';resync();const t=userTurnText();screen(t[0],t[1]);setPanel('Taken back','Pick up a piece and try another move.','you');ui();}
-$('undoBtn').addEventListener('click',takeBack);$('fUndo').addEventListener('click',takeBack);$('fSend').addEventListener('click',commit);
+$('spaceBtn').addEventListener('click',commit);$('fSend').addEventListener('click',commit);
+$('undoBtn').addEventListener('click',onUndo);$('fUndo').addEventListener('click',onUndo);
+$('hintBtn').addEventListener('click',showHint);
 $('zin').addEventListener('click',()=>{tR=Math.max(650,tR-180);});$('zout').addEventListener('click',()=>{tR=Math.min(2000,tR+180);});
 if(matchMedia('(pointer: coarse)').matches)$('hint').textContent='Tap a white piece, then a green square. Swipe sideways to orbit, use + and − to zoom.';
-$('newBtn').addEventListener('click',()=>{steps=[];cur=null;carry=null;arm={x:REST[0],y:REST[1],z:REST[2],d:10};game.reset();lastUser=null;lastBot=null;selected=null;targets=[];resync();toUser();});
-document.addEventListener('keydown',e=>{if(e.code==='Space'&&state==='pending'&&!(e.target.closest&&e.target.closest('button,input,textarea'))){e.preventDefault();commit();}});
+$('newBtn').addEventListener('click',()=>{if(state!=='over')saveGame('Unfinished');steps=[];cur=null;carry=null;arm={x:REST[0],y:REST[1],z:REST[2],d:10};game.reset();lastUser=null;lastBot=null;selected=null;targets=[];hint=null;verdicts=[];lastEval=null;saved=false;pre=null;resync();toUser();});
+document.addEventListener('keydown',e=>{if(e.target.closest&&e.target.closest('button,input,textarea'))return;
+  if(e.code==='Space'&&state==='pending'){e.preventDefault();commit();}
+  if((e.code==='Backspace'||e.code==='KeyZ')&&canUndo()&&!cur&&!steps.length){e.preventDefault();onUndo();}});
 function seg(id,fn){const g=$(id);g.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));fn(+b.dataset.v);}));}
-seg('lvl',v=>{level=v;});seg('spd',v=>{speed=v;});
+seg('lvl',v=>{level=v;});seg('spd',v=>{speed=v;});seg('coach',v=>{coachOn=!!v;if(coachOn&&state==='user')prefetch();renderCoach();});
 
+/* arm tabs */
+function switchArm(t,quiet){
+  if(cur||steps.length){setPanel('Arm is busy','Switch designs once the arm has finished its move.','bot');return;}
+  armType=t;if(t==='scara')buildScara();else buildArticulated();
+  setArm(arm.x,arm.y,arm.z,arm.d);
+  document.querySelectorAll('.armtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.arm===t));
+  $('armNoteH').textContent=ARM_NOTES[t][0];$('armNoteP').textContent=ARM_NOTES[t][1];
+  if(!quiet&&state==='user')setPanel(t==='scara'?'SCARA arm':'Articulated arm','Same board, gripper and electronics. Only the arm changes.','you');}
+document.querySelectorAll('.armtabs button').forEach(b=>b.addEventListener('click',()=>switchArm(b.dataset.arm)));
+document.querySelector('.armtabs').addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){const t=armType==='scara'?'articulated':'scara';switchArm(t);document.querySelector(`.armtabs [data-arm="${t}"]`).focus();}});
+
+/* electronics view */
 const labBox=$('labels');const labEls=LABELS.map((L,i)=>{const d=document.createElement('div');d.className='lab';d.textContent=i+1;labBox.appendChild(d);return d;});
 const legend=$('legend');LABELS.forEach((L,i)=>{const li=document.createElement('li');li.innerHTML='<b>'+(i+1)+'</b><span></span>';li.lastChild.textContent=L[0];legend.appendChild(li);});
 function applyX(){elec.visible=xray;labBox.hidden=!xray;legend.hidden=!xray;$('hint').hidden=xray||state==='pending';
-  platMesh.visible=!xray;frameMesh.visible=!xray;platEdges.visible=xray;frameEdges.visible=xray;floor.visible=xray;yawG.visible=!xray;armHouse.visible=!xray;
+  platMesh.visible=!xray;frameMesh.visible=!xray;platEdges.visible=xray;frameEdges.visible=xray;floor.visible=xray;if(armRoot)armRoot.visible=!xray;
   sqMesh.forEach(q=>{q.position.y=xray?103:13;});
   Object.values(sqMat).forEach(m=>{m.opacity=xray?0.4:1;m.depthWrite=!xray;m.needsUpdate=true;});
   Object.values(pieces).concat(grave).forEach(g=>{g.visible=!xray;});}
 $('xray').addEventListener('click',()=>{xray=!xray;$('xray').setAttribute('aria-pressed',xray);applyX();
   if(xray){tth=0.55;tph=0.62;tR=1050;}else{tth=0;tph=0.72;tR=1250;$('xray').blur();}
   document.querySelectorAll('.chip[data-view]').forEach(b=>b.setAttribute('aria-pressed',!xray&&b.dataset.view==='player'));});
+
 function size(){const w=view.clientWidth,h=view.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();}
 new ResizeObserver(size).observe(view);size();
 
@@ -521,9 +700,12 @@ function loop(now){
   setArm(arm.x,arm.y,arm.z,arm.d);
   if(carry){const top=TOP[carry.userData.type];carry.position.set(arm.x,arm.y-95-top,arm.z);}
   if(flash&&now>flash.until){flash=null;lights();}
+  if(hint&&now>hint.until){hint=null;lights();}
   if(xray){const w=view.clientWidth,h=view.clientHeight;LABELS.forEach((L,i)=>{const v=L[1].clone();root.localToWorld(v);v.project(cam);const el=labEls[i];if(v.z>1){el.hidden=true;return;}el.hidden=false;el.style.left=((v.x+1)/2*w)+'px';el.style.top=((1-v.y)/2*h)+'px';});}
   placeCam();renderer.render(scene,cam);requestAnimationFrame(loop);}
-resync();toUser();
+
+switchArm(location.hash==='#scara'?'scara':'articulated',true);
+resync();toUser();renderPast();engineLabel();startSF();
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{if(state==='user'||state==='over'){const t=state==='over'?overText():userTurnText();screen(t[0],t[1]);}});
 requestAnimationFrame(loop);
 })();
