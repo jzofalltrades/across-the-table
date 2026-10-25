@@ -130,6 +130,7 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
       <div class="armtabs" role="tablist" aria-label="Arm design">
         <button role="tab" id="tabArt" data-arm="articulated" aria-selected="true">Articulated arm</button>
         <button role="tab" id="tabScara" data-arm="scara" aria-selected="false">SCARA arm</button>
+        <button role="tab" id="tabGrip" data-arm="gripper" aria-selected="false">Gripper close-up</button>
       </div>
     </div>
     <div class="legend" aria-label="Square light colours">
@@ -140,7 +141,7 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
     </div>
   </header>
 
-  <div class="stage">
+  <div class="stage" id="mainStage">
     <div class="left">
       <div class="view" id="view">
         <canvas id="cv" aria-label="3D view of the robot chessboard. Click a white piece, then a lit square."></canvas>
@@ -232,6 +233,63 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
     </aside>
   </div>
 
+
+  <div class="stage" id="gripStage" hidden>
+    <div class="left">
+      <div class="view" id="gview">
+        <canvas id="gcv" aria-label="3D close-up of the gripper holding a chess piece"></canvas>
+        <div class="hint" id="ghint">Drag to orbit, scroll or use + and − to zoom. Turn on the cut-away to see the hooks inside.</div>
+        <div class="zoom"><button id="gzin" aria-label="Zoom in">+</button><button id="gzout" aria-label="Zoom out">−</button></div>
+      </div>
+      <section class="card howto" aria-labelledby="ghow-h">
+        <h2 id="ghow-h">How the gripper holds a piece</h2>
+        <ol>
+          <li><b>Come down open.</b> The arm lowers the gripper with the jaws apart, wide enough to pass the head, collar and crown.</li>
+          <li><b>One servo closes both jaws.</b> The grip servo turns a pinion. Two racks on a linear rail slide the fingers in by exactly the same amount, so they always meet centred.</li>
+          <li><b>Hooks wrap the neck.</b> The flat curved hooks at the bottom of each finger close around the neck just under the collar. On a rook they go under the turret lip.</li>
+          <li><b>The collar sits on the hooks.</b> On the lift the piece hangs from its collar, so even a loose grip can't drop it. The TPU lining stops it twisting.</li>
+          <li><b>Six heights, one motion.</b> The Pi knows which piece is on each square, so it lowers to that piece's grip height: 35 mm for a pawn up to 52 mm for a king.</li>
+        </ol>
+      </section>
+    </div>
+    <aside class="panel">
+      <div class="card">
+        <p class="eyebrow">Piece</p>
+        <div class="seg" role="group" aria-label="Piece to grip" id="gpiece">
+          <button data-v="p" aria-pressed="true">Pawn</button><button data-v="r" aria-pressed="false">Rook</button><button data-v="n" aria-pressed="false">Knight</button>
+          <button data-v="b" aria-pressed="false">Bishop</button><button data-v="q" aria-pressed="false">Queen</button><button data-v="k" aria-pressed="false">King</button>
+        </div>
+        <p class="sub" id="ginfo">Grip height 35 mm · under the collar</p>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <button class="btn space" id="gplay">Play the grab</button>
+        <div class="setting">
+          <label class="lbl" for="gopen">Jaw opening <span id="gout">0%</span></label>
+          <input type="range" id="gopen" min="0" max="100" step="1" value="0">
+        </div>
+        <div class="setting">
+          <span class="lbl" id="gsecLbl">Cut-away view</span>
+          <div class="seg" role="group" aria-labelledby="gsecLbl" id="gsec">
+            <button data-v="0" aria-pressed="true">Off</button><button data-v="1" aria-pressed="false">Cut in half</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <p class="eyebrow">Parts</p>
+        <ul class="past">
+          <li><span>Grip servo + pinion</span><span>MG90S, ~8 mm pinion</span></li>
+          <li><span>Racks on linear rail</span><span>MGN7 or 3 mm rods</span></li>
+          <li><span>Straight fingers</span><span>printed PETG</span></li>
+          <li><span>Flat hook jaws</span><span>TPU lined</span></li>
+          <li><span>Wrist plate</span><span>kept level by the arm</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <p class="eyebrow">Rules for the chess set</p>
+        <p class="sub" style="margin:0">Neck under 14 mm wide so the hooks can close. Collar or lip over 18 mm so the piece can't slip through. Jaws open at least 10 mm per side to pass the widest part above the grip.</p>
+      </div>
+    </aside>
+  </div>
   <section class="notes" aria-label="Design notes">
     <div class="card" id="armNote"><h2 id="armNoteH">Why an articulated arm</h2><p id="armNoteP"></p></div>
     <div class="card"><h2>Commit, cancel, undo</h2><p>The hall sensors can't tell when you've finished a move, so nothing is sent until you press the space bar. The red button cancels before sending, or takes back a full move after. Online, that takeback goes to the opponent as a request they accept, which the Lichess Board API supports.</p></div>
@@ -676,8 +734,15 @@ function switchArm(t,quiet){
   document.querySelectorAll('.armtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.arm===t));
   $('armNoteH').textContent=ARM_NOTES[t][0];$('armNoteP').textContent=ARM_NOTES[t][1];
   if(!quiet&&state==='user')setPanel(t==='scara'?'SCARA arm':'Articulated arm','Same board, gripper and electronics. Only the arm changes.','you');}
-document.querySelectorAll('.armtabs button').forEach(b=>b.addEventListener('click',()=>switchArm(b.dataset.arm)));
-document.querySelector('.armtabs').addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){const t=armType==='scara'?'articulated':'scara';switchArm(t);document.querySelector(`.armtabs [data-arm="${t}"]`).focus();}});
+let tab='articulated';
+function showTab(t){
+  if(t==='gripper'){tab=t;$('mainStage').hidden=true;$('gripStage').hidden=false;document.querySelectorAll('.armtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.arm==='gripper'));if(window.__grip)window.__grip(true);return;}
+  if(window.__grip)window.__grip(false);$('gripStage').hidden=true;$('mainStage').hidden=false;
+  if(t!==armType||tab==='gripper'){if(t!==armType)switchArm(t);else document.querySelectorAll('.armtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.arm===t));}
+  tab=t;size();}
+document.querySelectorAll('.armtabs button').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.arm)));
+const TABS=['articulated','scara','gripper'];
+document.querySelector('.armtabs').addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;const i=TABS.indexOf(tab);const t=TABS[(i+(e.key==='ArrowRight'?1:2))%3];showTab(t);document.querySelector(`.armtabs [data-arm="${t}"]`).focus();});
 
 /* electronics view */
 const labBox=$('labels');const labEls=LABELS.map((L,i)=>{const d=document.createElement('div');d.className='lab';d.textContent=i+1;labBox.appendChild(d);return d;});
@@ -702,12 +767,85 @@ function loop(now){
   if(flash&&now>flash.until){flash=null;lights();}
   if(hint&&now>hint.until){hint=null;lights();}
   if(xray){const w=view.clientWidth,h=view.clientHeight;LABELS.forEach((L,i)=>{const v=L[1].clone();root.localToWorld(v);v.project(cam);const el=labEls[i];if(v.z>1){el.hidden=true;return;}el.hidden=false;el.style.left=((v.x+1)/2*w)+'px';el.style.top=((1-v.y)/2*h)+'px';});}
-  placeCam();renderer.render(scene,cam);requestAnimationFrame(loop);}
+  if(!$('mainStage').hidden){placeCam();renderer.render(scene,cam);}requestAnimationFrame(loop);}
 
-switchArm(location.hash==='#scara'?'scara':'articulated',true);
+switchArm(location.hash==='#scara'?'scara':'articulated',true);if(location.hash==='#scara')tab='scara';
 resync();toUser();renderPast();engineLabel();startSF();
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{if(state==='user'||state==='over'){const t=state==='over'?overText():userTurnText();screen(t[0],t[1]);}});
 requestAnimationFrame(loop);
+if(location.hash==='#gripper')setTimeout(()=>showTab('gripper'),0);
+})();
+</script>
+<script>
+/* gripper close-up tab: same rack-and-pinion hook-jaw gripper, with a cut-away plane */
+(function(){
+const $=id=>document.getElementById(id);
+const gv=$('gview'),gc=$('gcv');
+let R2=null,active=false,raf=null,scene,cam,root,G,Lg,Rg,pin,piece=null,cur='p',d=0,z=0,off=0,carry=false,rotY=-0.55,rotX=0.2,dist=260,seq=null,section=false;
+const MAXD=10,plane=new THREE.Plane(new THREE.Vector3(0,0,-1),0);
+const P={p:{top:35.5,w:'under the collar'},r:{top:46.5,w:'under the turret lip'},n:{top:37.5,w:'under the collar ring'},b:{top:41.5,w:'under the collar'},q:{top:47.5,w:'under the collar'},k:{top:51.5,w:'under the collar'}};
+function M(c,o){const m=new THREE.MeshStandardMaterial({color:c,roughness:0.6,metalness:0.1,side:THREE.DoubleSide});if(o)Object.assign(m,o);return m;}
+const mesh=(g,m,x,y,z)=>{const o=new THREE.Mesh(g,m);o.position.set(x||0,y||0,z||0);return o;};
+function makePiece(t){const W=M(0xF1EFE8);const lath=p=>new THREE.LatheGeometry(p.map(q=>new THREE.Vector2(q[0],q[1])),48);
+  const bs=[[0,0],[16,0],[16,4],[12,7],[10,10],[12,14],[13,18]];const g=new THREE.Group();
+  const prof={p:[[12,25],[7,31],[5,34],[9,36],[9,38],[5,39],[5,41],[0,41]],r:[[12,25],[8,32],[6.5,38],[6.5,46],[11,47],[11,58],[0,58]],n:[[12,25],[7,33],[6,36],[10,38],[10,40],[6,41],[0,41]],b:[[12,25],[8,33],[6,40],[10,42],[10,44],[6,45],[6,47],[0,47]],q:[[12,28],[8,38],[6,46],[11,48],[11,50],[6,51],[7,54],[11,62],[11,64],[0,64]],k:[[12,28],[8,40],[6,50],[11,52],[11,54],[6,55],[7,58],[10,66],[10,68],[0,68]]};
+  g.add(new THREE.Mesh(lath(bs.concat(prof[t])),W));
+  if(t==='p')g.add(mesh(new THREE.SphereGeometry(7,32,16),W,0,46,0));
+  if(t==='r')for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4;g.add(mesh(new THREE.BoxGeometry(5,4,5),W,Math.cos(a)*8.5,60,Math.sin(a)*8.5));}
+  if(t==='n'){const n=mesh(new THREE.BoxGeometry(10,18,12),W,0,49,-1);n.rotation.x=-0.25;g.add(n);g.add(mesh(new THREE.BoxGeometry(9,9,18),W,0,58,4));}
+  if(t==='b'){const m=mesh(new THREE.SphereGeometry(8,32,16),W,0,57,0);m.scale.set(1,1.5,1);g.add(m);g.add(mesh(new THREE.SphereGeometry(3,16,12),W,0,72,0));}
+  if(t==='q')g.add(mesh(new THREE.SphereGeometry(3.5,16,12),W,0,68,0));
+  if(t==='k'){g.add(mesh(new THREE.BoxGeometry(3,12,3),W,0,75,0));g.add(mesh(new THREE.BoxGeometry(10,3,3),W,0,77,0));}
+  return g;}
+function clip(obj){obj.traverse(o=>{if(o.material){o.material.clippingPlanes=section?[plane]:null;o.material.needsUpdate=true;}});}
+function init(){
+  R2=new THREE.WebGLRenderer({canvas:gc,antialias:true,alpha:true});R2.setPixelRatio(Math.min(window.devicePixelRatio||1,2));R2.localClippingEnabled=true;
+  scene=new THREE.Scene();cam=new THREE.PerspectiveCamera(32,1,1,3000);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x888780,0.95));const dl=new THREE.DirectionalLight(0xffffff,0.7);dl.position.set(80,180,120);scene.add(dl);
+  root=new THREE.Group();scene.add(root);
+  for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++)root.add(mesh(new THREE.BoxGeometry(50,3,50),M(Math.abs(i+j)%2?0x8B5A3C:0xF1E6D0),i*50,-1.5,j*50));
+  const dark=M(0x5F5E5A),metal=M(0x888780),teal=M(0x5DCAA5),black=M(0x2C2C2A),light=M(0xB4B2A9);
+  function ring(s,ro,ri,span,mat,top){const c=s<0?Math.PI:0,a1=c-span,a2=c+span;const sh=new THREE.Shape();sh.moveTo(ro*Math.cos(a1),ro*Math.sin(a1));sh.absarc(0,0,ro,a1,a2,false);sh.lineTo(ri*Math.cos(a2),ri*Math.sin(a2));sh.absarc(0,0,ri,a2,a1,true);const m=new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:4,bevelEnabled:false,curveSegments:32}),mat);m.rotation.x=Math.PI/2;m.position.y=top;return m;}
+  G=new THREE.Group();root.add(G);const ZB=-24;
+  function hand(s){const g=new THREE.Group();g.add(ring(s,13,7.5,80*Math.PI/180,dark,35.5));g.add(ring(s,7.6,6.6,74*Math.PI/180,teal,35.5));
+    g.add(mesh(new THREE.BoxGeometry(6,4,19),dark,s*9,33.5,-17.5));g.add(mesh(new THREE.BoxGeometry(6,41.5,6),dark,s*9,52.25,ZB));g.add(mesh(new THREE.BoxGeometry(14,6,14),M(0x444441),s*11,73,ZB));return g;}
+  Lg=hand(-1);Rg=hand(1);
+  Lg.add(mesh(new THREE.BoxGeometry(34,3,6),metal,-4,91.5,ZB));Lg.add(mesh(new THREE.BoxGeometry(3,17,4),metal,-13,83,ZB));
+  Rg.add(mesh(new THREE.BoxGeometry(34,3,6),metal,4,76.5,ZB));Rg.add(mesh(new THREE.BoxGeometry(3,4,4),metal,13,76,ZB));
+  G.add(Lg);G.add(Rg);
+  const rail=mesh(new THREE.CylinderGeometry(1.5,1.5,78,12),dark,0,73,ZB);rail.rotation.z=Math.PI/2;G.add(rail);
+  pin=new THREE.Group();pin.position.set(0,84,ZB);const pc=mesh(new THREE.CylinderGeometry(6,6,6,18),light);pc.rotation.x=Math.PI/2;pin.add(pc);pin.add(mesh(new THREE.BoxGeometry(1.4,5,6.6),black,0,3,0));G.add(pin);
+  G.add(mesh(new THREE.BoxGeometry(68,30,24),M(0xD3D1C7,{transparent:true,opacity:0.18,depthWrite:false}),0,83,ZB));
+  G.add(mesh(new THREE.BoxGeometry(22,20,12),black,0,108,ZB));G.add(mesh(new THREE.BoxGeometry(40,4,20),metal,0,120,ZB));
+  select('p',true);
+  new ResizeObserver(size).observe(gv);
+  let drag=false,lx=0,ly=0;
+  gv.addEventListener('pointerdown',e=>{if(e.target.closest('.zoom'))return;drag=true;lx=e.clientX;ly=e.clientY;gv.setPointerCapture(e.pointerId);gv.style.cursor='grabbing';});
+  gv.addEventListener('pointermove',e=>{if(!drag)return;rotY-=(e.clientX-lx)*0.01;rotX=Math.max(-0.2,Math.min(1.3,rotX+(e.clientY-ly)*0.006));lx=e.clientX;ly=e.clientY;});
+  const end=()=>{drag=false;gv.style.cursor='grab';};gv.addEventListener('pointerup',end);gv.addEventListener('pointercancel',end);
+  gv.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(110,Math.min(520,dist+e.deltaY*0.3));},{passive:false});
+  $('gzin').addEventListener('click',()=>{dist=Math.max(110,dist-40);});$('gzout').addEventListener('click',()=>{dist=Math.min(520,dist+40);});
+}
+function size(){if(!R2)return;const w=gv.clientWidth,h=gv.clientHeight;if(!w||!h)return;R2.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();}
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+function select(t,quiet){cur=t;if(piece)root.remove(piece);piece=makePiece(t);root.add(piece);off=P[t].top-35.5;carry=false;clip(piece);clip(G);
+  $('ginfo').textContent='Grip height '+Math.round(P[t].top)+' mm · '+P[t].w;
+  document.querySelectorAll('#gpiece button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===t));
+  if(!quiet)play();else{z=off;d=0;}}
+function play(){seq={i:0,s:performance.now(),ph:[
+  {z:[off+45,off+45],d:[MAXD,MAXD],c:false,t:200},{z:[off+45,off],d:[MAXD,MAXD],c:false,t:1100},{z:[off,off],d:[MAXD,0],c:false,t:1000},
+  {z:[off,off+30],d:[0,0],c:true,t:1000},{z:[off+30,off+30],d:[0,0],c:true,t:600}]};}
+function apply(){Lg.position.x=-d;Rg.position.x=d;pin.rotation.z=d/6;G.position.y=z;piece.position.y=carry?z-off:0;
+  const t=new THREE.Vector3(0,40+off,-6);cam.position.set(t.x+dist*Math.cos(rotX)*Math.sin(rotY),t.y+dist*Math.sin(rotX),t.z+dist*Math.cos(rotX)*Math.cos(rotY));cam.lookAt(t);
+  const p=Math.round(d/MAXD*100);$('gopen').value=p;$('gout').textContent=p+'%';}
+function loop(now){if(!active){raf=null;return;}
+  if(seq){const p=seq.ph[seq.i];const k=Math.min(1,(now-seq.s)/p.t);const e=ease(k);z=p.z[0]+(p.z[1]-p.z[0])*e;d=p.d[0]+(p.d[1]-p.d[0])*e;carry=p.c;if(k>=1){seq.i++;seq.s=now;if(seq.i>=seq.ph.length)seq=null;}}
+  apply();R2.render(scene,cam);raf=requestAnimationFrame(loop);}
+document.querySelectorAll('#gpiece button').forEach(b=>b.addEventListener('click',()=>select(b.dataset.v)));
+$('gplay').addEventListener('click',play);
+$('gopen').addEventListener('input',e=>{seq=null;d=e.target.value/100*MAXD;carry=false;z=off;});
+document.querySelectorAll('#gsec button').forEach(b=>b.addEventListener('click',()=>{section=b.dataset.v==='1';document.querySelectorAll('#gsec button').forEach(x=>x.setAttribute('aria-pressed',x===b));clip(G);clip(piece);if(section){rotY=0.35;rotX=0.25;}}));
+window.__grip=function(on){active=on;if(on){if(!R2)init();size();if(!raf)raf=requestAnimationFrame(loop);}};
 })();
 </script>
 
