@@ -88,6 +88,13 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
 .notes h2{font-family:var(--display);font-size:16px;font-weight:600;margin:0 0 4px}
 .notes p{margin:0;font-size:13.5px;color:var(--muted);max-width:65ch}
 @media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+.zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:500 20px var(--body);cursor:pointer;line-height:1}
+.floatbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:8px;max-width:calc(100% - 70px)}
+.floatbar .btn{white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.floatbar .space{width:auto;padding:12px 18px}
+@media (pointer:coarse){.view{touch-action:pan-y}}
+@media (max-width:700px){.view{height:clamp(340px,58vh,520px)}.hint{right:58px;font-size:11.5px}h1{font-size:30px}}
 </style>
 
 </head>
@@ -116,7 +123,9 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
         <button class="chip xr" id="xray" aria-pressed="false">Show electronics</button>
       </div>
       <div class="labels" id="labels" hidden></div>
-      <div class="hint" id="hint">Click a white piece, then a lit square. Drag to orbit, scroll to zoom.</div>
+      <div class="hint" id="hint">Click a white piece, then a green square. Drag to orbit, scroll to zoom.</div>
+      <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button></div>
+      <div class="floatbar" id="floatbar" hidden><button class="btn" id="fUndo">Take back</button><button class="btn space" id="fSend">Send move</button></div>
     </div>
     <ol class="legendBox" id="legend" hidden aria-label="Electronics parts"></ol>
     <section class="card howto" aria-labelledby="howto-h">
@@ -418,7 +427,7 @@ function setPanel(a,b,mode){$('turn').textContent=a;$('sub').textContent=b||'';c
 function movesUI(){const h=game.history();const el=$('moves');el.innerHTML='';$('movesEmpty').hidden=h.length>0;
   for(let i=0;i<h.length;i+=2){const n=document.createElement('span');n.className='n';n.textContent=(i/2+1)+'.';const a=document.createElement('span');a.textContent=h[i];const b=document.createElement('span');b.textContent=h[i+1]||'';el.append(n,a,b);}
   el.scrollTop=el.scrollHeight;}
-function ui(){$('spaceBtn').disabled=state!=='pending';$('undoBtn').disabled=state!=='pending';movesUI();lights();}
+function ui(){$('spaceBtn').disabled=state!=='pending';$('undoBtn').disabled=state!=='pending';$('floatbar').hidden=state!=='pending';$('hint').hidden=(typeof xray!=='undefined'&&xray)||state==='pending';movesUI();lights();}
 function overText(){if(game.in_checkmate())return game.turn()==='b'?['Checkmate','You win. Press New game to play again.']:['Checkmate','The opponent wins this one.'];
   if(game.in_stalemate())return ['Stalemate','Draw. Press New game to play again.'];return ['Draw','Press New game to play again.'];}
 function userTurnText(){if(lastBot){const s=`Opponent played ${lastBot.san}.`;return game.in_check()?['Check',s+' Your king is attacked.']:['Your move',s+' Pick up a piece.'];}return ['Your move','You play white. Pick up a piece by clicking it.'];}
@@ -466,14 +475,15 @@ function robotMove(){
 const target=new THREE.Vector3(0,30,-40);
 let th=0,ph=0.72,R=1250,tth=th,tph=ph,tR=R;
 const VIEWS={player:[0,0.72,1250],side:[1.25,0.55,1250],top:[0,1.45,1150],robot:[Math.PI,0.62,1250]};
+if(matchMedia('(max-width: 700px)').matches){VIEWS.player[1]=0.95;ph=tph=0.95;}
 function setView(k){const v=VIEWS[k];tth=v[0];tph=v[1];tR=v[2];document.querySelectorAll('.chip[data-view]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===k));}
 document.querySelectorAll('.chip[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
 function placeCam(){th+=(tth-th)*0.12;ph+=(tph-ph)*0.12;R+=(tR-R)*0.12;
-  cam.position.set(target.x+R*Math.cos(ph)*Math.sin(th),target.y+R*Math.sin(ph),target.z+R*Math.cos(ph)*Math.cos(th));cam.lookAt(target);}
+  const RR=R*Math.max(1,1.15/cam.aspect);cam.position.set(target.x+RR*Math.cos(ph)*Math.sin(th),target.y+RR*Math.sin(ph),target.z+RR*Math.cos(ph)*Math.cos(th));cam.lookAt(target);}
 let drag=false,moved=0,lx=0,ly=0;
-view.addEventListener('pointerdown',e=>{if(e.target.closest('.views'))return;drag=true;moved=0;lx=e.clientX;ly=e.clientY;view.setPointerCapture(e.pointerId);view.style.cursor='grabbing';});
-view.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-lx,dy=e.clientY-ly;moved+=Math.abs(dx)+Math.abs(dy);if(moved>6){tth-=dx*0.006;tph=Math.max(0.15,Math.min(1.5,tph+dy*0.004));th=tth;ph=tph;document.querySelectorAll('.chip[data-view]').forEach(b=>b.setAttribute('aria-pressed','false'));}lx=e.clientX;ly=e.clientY;});
-view.addEventListener('pointerup',e=>{if(!drag)return;drag=false;view.style.cursor='grab';if(moved<=6)pick(e);});
+view.addEventListener('pointerdown',e=>{if(e.target.closest('.views,.zoom,.floatbar'))return;drag=true;moved=0;lx=e.clientX;ly=e.clientY;view.setPointerCapture(e.pointerId);view.style.cursor='grabbing';});
+view.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-lx,dy=e.clientY-ly;moved+=Math.abs(dx)+Math.abs(dy);if(moved>(e.pointerType==='touch'?14:6)){tth-=dx*0.006;tph=Math.max(0.15,Math.min(1.5,tph+dy*0.004));th=tth;ph=tph;document.querySelectorAll('.chip[data-view]').forEach(b=>b.setAttribute('aria-pressed','false'));}lx=e.clientX;ly=e.clientY;});
+view.addEventListener('pointerup',e=>{if(!drag)return;drag=false;view.style.cursor='grab';if(moved<=(e.pointerType==='touch'?14:6))pick(e);});
 view.addEventListener('pointercancel',()=>{drag=false;view.style.cursor='grab';});
 view.addEventListener('wheel',e=>{e.preventDefault();tR=Math.max(650,Math.min(2000,tR+e.deltaY*0.8));},{passive:false});
 const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();
@@ -483,7 +493,10 @@ function pick(e){const r=cv.getBoundingClientRect();mouse.x=((e.clientX-r.left)/
 
 /* controls */
 $('spaceBtn').addEventListener('click',commit);
-$('undoBtn').addEventListener('click',()=>{if(state!=='pending')return;game.undo();lastUser=null;state='user';resync();const t=userTurnText();screen(t[0],t[1]);setPanel('Taken back','Pick up a piece and try another move.','you');ui();});
+function takeBack(){if(state!=='pending')return;game.undo();lastUser=null;state='user';resync();const t=userTurnText();screen(t[0],t[1]);setPanel('Taken back','Pick up a piece and try another move.','you');ui();}
+$('undoBtn').addEventListener('click',takeBack);$('fUndo').addEventListener('click',takeBack);$('fSend').addEventListener('click',commit);
+$('zin').addEventListener('click',()=>{tR=Math.max(650,tR-180);});$('zout').addEventListener('click',()=>{tR=Math.min(2000,tR+180);});
+if(matchMedia('(pointer: coarse)').matches)$('hint').textContent='Tap a white piece, then a green square. Swipe sideways to orbit, use + and − to zoom.';
 $('newBtn').addEventListener('click',()=>{steps=[];cur=null;carry=null;arm={x:REST[0],y:REST[1],z:REST[2],d:10};game.reset();lastUser=null;lastBot=null;selected=null;targets=[];resync();toUser();});
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&state==='pending'&&!(e.target.closest&&e.target.closest('button,input,textarea'))){e.preventDefault();commit();}});
 function seg(id,fn){const g=$(id);g.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));fn(+b.dataset.v);}));}
@@ -491,7 +504,7 @@ seg('lvl',v=>{level=v;});seg('spd',v=>{speed=v;});
 
 const labBox=$('labels');const labEls=LABELS.map((L,i)=>{const d=document.createElement('div');d.className='lab';d.textContent=i+1;labBox.appendChild(d);return d;});
 const legend=$('legend');LABELS.forEach((L,i)=>{const li=document.createElement('li');li.innerHTML='<b>'+(i+1)+'</b><span></span>';li.lastChild.textContent=L[0];legend.appendChild(li);});
-function applyX(){elec.visible=xray;labBox.hidden=!xray;legend.hidden=!xray;$('hint').hidden=xray;
+function applyX(){elec.visible=xray;labBox.hidden=!xray;legend.hidden=!xray;$('hint').hidden=xray||state==='pending';
   platMesh.visible=!xray;frameMesh.visible=!xray;platEdges.visible=xray;frameEdges.visible=xray;floor.visible=xray;yawG.visible=!xray;armHouse.visible=!xray;
   sqMesh.forEach(q=>{q.position.y=xray?103:13;});
   Object.values(sqMat).forEach(m=>{m.opacity=xray?0.4:1;m.depthWrite=!xray;m.needsUpdate=true;});
