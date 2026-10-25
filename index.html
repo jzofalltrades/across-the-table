@@ -126,6 +126,14 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
 .facts b{color:var(--fg);font-weight:500;display:block}
 @media (max-width:700px){.view{height:clamp(340px,58vh,520px)}.hint{font-size:11.5px}h1{font-size:30px}}
 @media (prefers-reduced-motion: reduce){.evalbar i{transition:none}}
+.playcue{display:inline-flex;align-items:center;gap:8px;margin:10px 0 0;font:600 14px var(--display);color:var(--teal);background:var(--teal-soft);padding:6px 12px;border-radius:999px}
+.playcue i{width:8px;height:8px;border-radius:50%;background:var(--teal);display:inline-block}
+.startcue{position:absolute;left:50%;top:58px;transform:translateX(-50%);background:var(--panel);color:var(--fg);border:2px solid var(--teal);border-radius:12px;padding:10px 16px;font:500 14px/1.45 var(--body);box-shadow:0 4px 18px rgba(0,0,0,.18);pointer-events:none;text-align:center;width:max-content;max-width:calc(100% - 32px)}
+.startcue b{color:var(--teal);font-weight:600}
+@keyframes cuePulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.04)}}
+@keyframes dotPulse{0%,100%{opacity:1}50%{opacity:.3}}
+@media (prefers-reduced-motion:no-preference){.startcue{animation:cuePulse 1.8s ease-in-out infinite}.playcue i{animation:dotPulse 1.4s ease-in-out infinite}}
+@media (max-width:700px){.startcue{top:96px;font-size:13px}}
 </style>
 
 </head>
@@ -135,6 +143,7 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
     <div>
       <h1>Across the Table</h1>
       <p class="byline">A robot chessboard that plays your online opponent · designed and built by Jayant Bhanse</p>
+      <p class="playcue"><i aria-hidden="true"></i>Interactive board: play a full game right here in your browser</p>
       <div class="armtabs" role="tablist" aria-label="Arm design">
         <button role="tab" id="tabArt" data-arm="articulated" aria-selected="true">Articulated arm</button>
         <button role="tab" id="tabScara" data-arm="scara" aria-selected="false">SCARA arm</button>
@@ -162,6 +171,7 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
           <button class="chip xr" id="xray" aria-pressed="false">Show electronics</button>
         </div>
         <div class="labels" id="labels" hidden></div>
+        <div class="startcue" id="startcue"><b>This board is interactive.</b><br><span id="startcueTxt">Click any glowing white piece to start playing.</span></div>
         <div class="hint" id="hint">Click a white piece, then a green square. Drag to orbit, scroll to zoom.</div>
         <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button></div>
         <div class="floatbar" id="floatbar" hidden><button class="btn undo" id="fUndo"><i class="dot"></i>Cancel</button><button class="btn space" id="fSend">Send move</button></div>
@@ -756,7 +766,7 @@ function clickSquare(sq){
     const extra=res.flags.includes('p')?' Promoted to a queen.':res.captured?` You took the ${NAMES[res.captured]} to the tray.`:'';
     screen('Send '+res.from+'-'+res.to+'?','Space to send · red to cancel');setPanel('Press the space bar',`You moved ${res.san}.${extra} The red button cancels it.`,'you');ui();return;}
   const p=game.get(sq);const now=performance.now();
-  if(p&&p.color==='w'){selected=sq;targets=game.moves({square:sq,verbose:true}).map(m=>m.to);
+  if(p&&p.color==='w'){hideCue();selected=sq;targets=game.moves({square:sq,verbose:true}).map(m=>m.to);
     if(!targets.length){flash={sq,until:now+900};setPanel('No legal moves','That piece is blocked, so its square flashes red. Try another.','you');}
     else setPanel('Piece lifted',`Green squares are legal for this ${NAMES[p.type]}. Any other square flashes red.`,'you');}
   else if(selected){flash={sq,until:now+900};setPanel('Illegal move',`${sq} isn't legal for that piece. On the real board that square flashes red until you move it back.`,'you');}
@@ -805,6 +815,11 @@ function onUndo(){pressMesh(undoBtn3,11);if(state==='pending')takeBack();else un
 function showHint(){if(!pre||state!=='user')return;hint={sqs:[pre.best.slice(0,2),pre.best.slice(2,4)],until:performance.now()+3500};hintsUsed++;
   setPanel('Hint',`Stockfish suggests ${pre.bestSan}. The two blue squares show it.`,'you');lights();}
 
+/* first-visit cue: pulse the squares of pieces you can move until the first piece is picked up */
+let cueOn=true;
+function hideCue(){if(!cueOn)return;cueOn=false;$('startcue').hidden=true;lights();}
+function movable(){return [...new Set(game.moves({verbose:true}).map(m=>m.from))];}
+
 /* camera */
 const target=new THREE.Vector3(0,30,-40);
 let th=0,ph=0.72,R=1250,tth=th,tph=ph,tR=R;
@@ -830,6 +845,7 @@ $('spaceBtn').addEventListener('click',commit);$('fSend').addEventListener('clic
 $('undoBtn').addEventListener('click',onUndo);$('fUndo').addEventListener('click',onUndo);
 $('hintBtn').addEventListener('click',showHint);
 $('zin').addEventListener('click',()=>{tR=Math.max(650,tR-180);});$('zout').addEventListener('click',()=>{tR=Math.min(2000,tR+180);});
+if(matchMedia('(pointer: coarse)').matches)$('startcueTxt').textContent='Tap any glowing white piece to start playing.';
 if(matchMedia('(pointer: coarse)').matches)$('hint').textContent='Tap a white piece, then a green square. Swipe sideways to orbit, use + and − to zoom.';
 $('newBtn').addEventListener('click',()=>{if(state!=='over')saveGame('Unfinished');steps=[];cur=null;carry=null;arm={x:REST[0],y:REST[1],z:REST[2],d:10};game.reset();lastUser=null;lastBot=null;selected=null;targets=[];hint=null;verdicts=[];lastEval=null;saved=false;pre=null;resync();toUser();});
 document.addEventListener('keydown',e=>{if(e.target.closest&&e.target.closest('button,input,textarea'))return;
@@ -867,7 +883,7 @@ function applyX(){elec.visible=xray;labBox.hidden=!xray;legend.hidden=!xray;$('h
   sqMesh.forEach(q=>{q.position.y=xray?103:13;});
   Object.values(sqMat).forEach(m=>{m.opacity=xray?0.4:1;m.depthWrite=!xray;m.needsUpdate=true;});
   Object.values(pieces).concat(grave).forEach(g=>{g.visible=!xray;});}
-$('xray').addEventListener('click',()=>{xray=!xray;$('xray').setAttribute('aria-pressed',xray);applyX();
+$('xray').addEventListener('click',()=>{xray=!xray;if(cueOn)$('startcue').hidden=xray;$('xray').setAttribute('aria-pressed',xray);applyX();
   if(xray){tth=0.55;tph=0.62;tR=1050;}else{tth=0;tph=0.72;tR=1250;$('xray').blur();}
   document.querySelectorAll('.chip[data-view]').forEach(b=>b.setAttribute('aria-pressed',!xray&&b.dataset.view==='player'));});
 
@@ -881,6 +897,7 @@ function loop(now){
   if(carry){const top=TOP[carry.userData.type];carry.position.set(arm.x,arm.y-95-top,arm.z);}
   if(flash&&now>flash.until){flash=null;lights();}
   if(hint&&now>hint.until){hint=null;lights();}
+  if(cueOn&&state==='user'&&!selected&&!xray){const k=0.15+0.3*(0.5+0.5*Math.sin(now/280));movable().forEach(sq=>{const m=sqMat[sq];m.color.set(0x52D16E);m.emissive.set(0x52D16E);m.emissiveIntensity=k;const l=ledMat[sq];if(l){l.emissive.set(0x52D16E);l.emissiveIntensity=1.2;}});}
   if(xray){const w=view.clientWidth,h=view.clientHeight;LABELS.forEach((L,i)=>{const v=L[1].clone();root.localToWorld(v);v.project(cam);const el=labEls[i];if(v.z>1){el.hidden=true;return;}el.hidden=false;el.style.left=((v.x+1)/2*w)+'px';el.style.top=((1-v.y)/2*h)+'px';});}
   if(!$('mainStage').hidden){placeCam();renderer.render(scene,cam);}requestAnimationFrame(loop);}
 
