@@ -134,6 +134,9 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
 @keyframes dotPulse{0%,100%{opacity:1}50%{opacity:.3}}
 @media (prefers-reduced-motion:no-preference){.startcue{animation:cuePulse 1.8s ease-in-out infinite}.playcue i{animation:dotPulse 1.4s ease-in-out infinite}}
 @media (max-width:700px){.startcue{top:96px;font-size:13px}}
+.sendcue{border-color:var(--amber)}
+.sendcue .amb{color:var(--amber)}.sendcue .redt{color:var(--red)}
+.sendcue kbd{font-size:12px;opacity:1}
 </style>
 
 </head>
@@ -174,7 +177,7 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
         <div class="startcue" id="startcue"><b>This board is interactive.</b><br><span id="startcueTxt">Click any glowing white piece to start playing.</span></div>
         <div class="hint" id="hint">Click a white piece, then a green square. Drag to orbit, scroll to zoom.</div>
         <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button></div>
-        <div class="floatbar" id="floatbar" hidden><button class="btn undo" id="fUndo"><i class="dot"></i>Cancel</button><button class="btn space" id="fSend">Send move</button></div>
+        <div class="startcue sendcue" id="floatbar" hidden><span id="sendTxt">Press <kbd>Space</kbd> or click the glowing <b class="amb">amber space bar</b> on the board to send your move.<br>Click the <b class="redt">red button</b> on the board to cancel it.</span></div>
       </div>
       <ol class="legendBox" id="legend" hidden aria-label="Electronics parts"></ol>
       <section class="card howto" aria-labelledby="howto-h">
@@ -841,11 +844,11 @@ function pick(e){const r=cv.getBoundingClientRect();mouse.x=((e.clientX-r.left)/
   for(const h of hits){let o=h.object;while(o&&o!==root){if(o.userData.bar){commit();return;}if(o.userData.cancel){onUndo();return;}if(o.userData.sq){clickSquare(o.userData.sq);return;}o=o.parent;}}}
 
 /* controls */
-$('spaceBtn').addEventListener('click',commit);$('fSend').addEventListener('click',commit);
-$('undoBtn').addEventListener('click',onUndo);$('fUndo').addEventListener('click',onUndo);
+$('spaceBtn').addEventListener('click',commit);
+$('undoBtn').addEventListener('click',onUndo);
 $('hintBtn').addEventListener('click',showHint);
 $('zin').addEventListener('click',()=>{tR=Math.max(650,tR-180);});$('zout').addEventListener('click',()=>{tR=Math.min(2000,tR+180);});
-if(matchMedia('(pointer: coarse)').matches)$('startcueTxt').textContent='Tap any glowing white piece to start playing.';
+if(matchMedia('(pointer: coarse)').matches){$('startcueTxt').textContent='Tap any glowing white piece to start playing.';$('sendTxt').innerHTML='Tap the glowing <b class="amb">amber space bar</b> on the board to send your move.<br>Tap the <b class="redt">red button</b> on the board to cancel it.';}
 if(matchMedia('(pointer: coarse)').matches)$('hint').textContent='Tap a white piece, then a green square. Swipe sideways to orbit, use + and − to zoom.';
 $('newBtn').addEventListener('click',()=>{if(state!=='over')saveGame('Unfinished');steps=[];cur=null;carry=null;arm={x:REST[0],y:REST[1],z:REST[2],d:10};game.reset();lastUser=null;lastBot=null;selected=null;targets=[];hint=null;verdicts=[];lastEval=null;saved=false;pre=null;resync();toUser();});
 document.addEventListener('keydown',e=>{if(e.target.closest&&e.target.closest('button,input,textarea'))return;
@@ -897,6 +900,7 @@ function loop(now){
   if(carry){const top=TOP[carry.userData.type];carry.position.set(arm.x,arm.y-95-top,arm.z);}
   if(flash&&now>flash.until){flash=null;lights();}
   if(hint&&now>hint.until){hint=null;lights();}
+  if(state==='pending'){const k=0.5+0.5*Math.sin(now/260);barMat.emissiveIntensity=0.2+0.5*k;undoMat.emissiveIntensity=0.15+0.45*k;}
   if(cueOn&&state==='user'&&!selected&&!xray){const k=0.15+0.3*(0.5+0.5*Math.sin(now/280));movable().forEach(sq=>{const m=sqMat[sq];m.color.set(0x52D16E);m.emissive.set(0x52D16E);m.emissiveIntensity=k;const l=ledMat[sq];if(l){l.emissive.set(0x52D16E);l.emissiveIntensity=1.2;}});}
   if(xray){const w=view.clientWidth,h=view.clientHeight;LABELS.forEach((L,i)=>{const v=L[1].clone();root.localToWorld(v);v.project(cam);const el=labEls[i];if(v.z>1){el.hidden=true;return;}el.hidden=false;el.style.left=((v.x+1)/2*w)+'px';el.style.top=((1-v.y)/2*h)+'px';});}
   if(!$('mainStage').hidden){placeCam();renderer.render(scene,cam);}requestAnimationFrame(loop);}
