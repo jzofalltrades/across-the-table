@@ -188,6 +188,7 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
           <li><b>Press the space bar.</b> Use your keyboard, the amber Send move button, or the bar on the board itself.</li>
           <li><b>Watch the arm reply.</b> It reaches across, picks up the opponent's piece and plays it. Amber squares show its move. A red king means check.</li>
           <li><b>Undo with the red button.</b> Before you send, it cancels your move. After the reply, it takes back the last pair: the arm reverses its own move and a blue square shows where your piece goes back.</li>
+          <li><b>Hands off while it moves.</b> Touch the board while the arm is moving and it stops, lifts and parks safely. Press the space bar to let it finish.</li>
           <li><b>Train with the coach.</b> Stockfish rates every move you send and can show a hint. Finished games are kept in the board's memory so you can see yourself improve.</li>
           <li><b>Compare the arms.</b> Switch between the articulated and SCARA designs at the top, and press Show electronics to see inside.</li>
         </ol>
@@ -417,6 +418,7 @@ kbd{font:500 11px var(--mono);border:1px solid currentColor;border-radius:5px;pa
   </div>
   <section class="notes" aria-label="Design notes">
     <div class="card" id="armNote"><h2 id="armNoteH">Why an articulated arm</h2><p id="armNoteP"></p></div>
+    <div class="card"><h2>Safety stop</h2><p>If you touch the board while the arm is moving, the sensors notice. The arm stops, lifts straight up and parks in its safe position, still holding its piece. Once your hand is away, press the space bar and it finishes the move. Try it: click a square while the arm is moving.</p></div>
     <div class="card"><h2>Commit, cancel, undo</h2><p>The hall sensors can't tell when you've finished a move, so nothing is sent until you press the space bar. The red button cancels before sending, or takes back a full move after. Online, that takeback goes to the opponent as a request they accept, which the Lichess Board API supports.</p></div>
     <div class="card"><h2>A board that remembers</h2><p>The Pi keeps every game, move by move, with Stockfish's verdict on each of your moves. Over time it shows whether your blunders are falling and which phase of the game costs you most, which turns the board into a training partner.</p></div>
     <div class="card"><h2>Captures go first</h2><p>When the opponent captures, the arm clears your piece to the graveyard tray before making its own move. Castling moves king then rook. Promotion swaps in a queen.</p></div>
@@ -750,7 +752,10 @@ function movesUI(){const h=game.history();const el=$('moves');el.innerHTML='';$(
     const b=document.createElement('span');b.textContent=h[i+1]||'';el.append(n,a,b);}
   el.scrollTop=el.scrollHeight;}
 function canUndo(){return state==='pending'||(state==='user'&&game.history().length>=2)||(state==='over'&&game.history().length>=1&&game.turn()==='b');}
-function ui(){const p=state==='pending';$('spaceBtn').disabled=!p;$('undoBtn').disabled=!canUndo();$('floatbar').hidden=!p;$('hint').hidden=xray||p;
+function ui(){const p=state==='pending',paused=!!(safety&&safety.ready);$('spaceBtn').disabled=!(p||paused);$('undoBtn').disabled=!canUndo();$('floatbar').hidden=!(p||paused);$('hint').hidden=xray||p||paused;
+  if(sendDefault===null)sendDefault=$('sendTxt').innerHTML;
+  $('sendTxt').innerHTML=paused?'<b class="redt">Arm paused for safety.</b> Hand away? Press <kbd>Space</kbd> or click the glowing <b class="amb">amber space bar</b> to let it finish the move.':sendDefault;
+  $('floatbar').style.borderColor=paused?'var(--red)':'';
   $('undoNote').textContent=p?'Red button: cancel this move before it is sent.':'Red button: take back the last move pair. The arm reverses its own move.';
   movesUI();lights();renderCoach(verdicts.length?verdicts.length-1:null);}
 function overText(){if(game.in_checkmate())return game.turn()==='b'?['Checkmate','You win. Press New game to play again.']:['Checkmate','The opponent wins this one.'];
@@ -778,6 +783,7 @@ function clickSquare(sq){
   lights();}
 function pressMesh(m,y){m.position.y=y-3;setTimeout(()=>{m.position.y=y;},180);}
 function commit(){
+  if(safety){if(safety.ready){pressMesh(bar,9);resumeArm();}return;}
   if(state!=='pending')return;
   state='bot';ui();pressMesh(bar,9);
   const uIdx=Math.floor((game.history().length-1)/2);
@@ -818,6 +824,18 @@ function onUndo(){pressMesh(undoBtn3,11);if(state==='pending')takeBack();else un
 function showHint(){if(!pre||state!=='user')return;hint={sqs:[pre.best.slice(0,2),pre.best.slice(2,4)],until:performance.now()+3500};hintsUsed++;
   setPanel('Hint',`Stockfish suggests ${pre.bestSan}. The two blue squares show it.`,'you');lights();}
 
+/* safety stop: any touch on the board while the arm moves stops it, lifts it straight up and parks it */
+let safety=null,sendDefault=null;
+function safetyStop(sq){
+  if(safety||!(cur||steps.length))return;
+  const rest=[];if(cur)rest.push(cur);rest.push(...steps);cur=null;
+  safety={resume:rest,at:[arm.x,arm.z,arm.d],ready:false};
+  flash={sq,until:performance.now()+1500};
+  steps=[go(arm.x,Math.max(arm.y,CRUISE),arm.z,arm.d),go(REST[0],REST[1],REST[2],arm.d),act(()=>{safety.ready=true;screen('Arm paused','Press space to continue');setPanel('Arm paused','Take your hand away, then press Space or the amber bar on the board to let the arm finish its move.','bot');ui();})];
+  screen('Hand detected','Arm stopping');setPanel('Hand detected','The arm stopped, lifted straight up and is moving to its safe position. On the real board, any sensor change during an arm move does this.','bot');ui();}
+function resumeArm(){if(!safety||!safety.ready)return;const [px,pz,pd]=safety.at;const rest=safety.resume;safety=null;
+  steps=[say('Resuming','Finishing the move.'),go(px,CRUISE,pz,pd),...rest];ui();}
+
 /* first-visit cue: pulse the squares of pieces you can move until the first piece is picked up */
 let cueOn=true;
 function hideCue(){if(!cueOn)return;cueOn=false;$('startcue').hidden=true;lights();}
@@ -841,7 +859,8 @@ view.addEventListener('wheel',e=>{e.preventDefault();tR=Math.max(650,Math.min(20
 const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();
 function pick(e){const r=cv.getBoundingClientRect();mouse.x=((e.clientX-r.left)/r.width)*2-1;mouse.y=-((e.clientY-r.top)/r.height)*2+1;ray.setFromCamera(mouse,cam);
   const hits=ray.intersectObjects(root.children,true);
-  for(const h of hits){let o=h.object;while(o&&o!==root){if(o.userData.bar){commit();return;}if(o.userData.cancel){onUndo();return;}if(o.userData.sq){clickSquare(o.userData.sq);return;}o=o.parent;}}}
+  for(const h of hits){let o=h.object;while(o&&o!==root){if(o.userData.bar){commit();return;}if(o.userData.cancel){if(state!=='bot')onUndo();return;}
+    if(o.userData.sq){if(state==='bot'&&(cur||steps.length||safety)){if(!safety)safetyStop(o.userData.sq);else{flash={sq:o.userData.sq,until:performance.now()+900};lights();}}else clickSquare(o.userData.sq);return;}o=o.parent;}}}
 
 /* controls */
 $('spaceBtn').addEventListener('click',commit);
@@ -850,9 +869,9 @@ $('hintBtn').addEventListener('click',showHint);
 $('zin').addEventListener('click',()=>{tR=Math.max(650,tR-180);});$('zout').addEventListener('click',()=>{tR=Math.min(2000,tR+180);});
 if(matchMedia('(pointer: coarse)').matches){$('startcueTxt').textContent='Tap any glowing white piece to start playing.';$('sendTxt').innerHTML='Tap the glowing <b class="amb">amber space bar</b> on the board to send your move.<br>Tap the <b class="redt">red button</b> on the board to cancel it.';}
 if(matchMedia('(pointer: coarse)').matches)$('hint').textContent='Tap a white piece, then a green square. Swipe sideways to orbit, use + and − to zoom.';
-$('newBtn').addEventListener('click',()=>{if(state!=='over')saveGame('Unfinished');steps=[];cur=null;carry=null;arm={x:REST[0],y:REST[1],z:REST[2],d:10};game.reset();lastUser=null;lastBot=null;selected=null;targets=[];hint=null;verdicts=[];lastEval=null;saved=false;pre=null;resync();toUser();});
+$('newBtn').addEventListener('click',()=>{if(state!=='over')saveGame('Unfinished');steps=[];cur=null;safety=null;carry=null;arm={x:REST[0],y:REST[1],z:REST[2],d:10};game.reset();lastUser=null;lastBot=null;selected=null;targets=[];hint=null;verdicts=[];lastEval=null;saved=false;pre=null;resync();toUser();});
 document.addEventListener('keydown',e=>{if(e.target.closest&&e.target.closest('button,input,textarea'))return;
-  if(e.code==='Space'&&state==='pending'){e.preventDefault();commit();}
+  if(e.code==='Space'&&(state==='pending'||(safety&&safety.ready))){e.preventDefault();commit();}
   if((e.code==='Backspace'||e.code==='KeyZ')&&canUndo()&&!cur&&!steps.length){e.preventDefault();onUndo();}});
 function seg(id,fn){const g=$(id);g.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));fn(+b.dataset.v);}));}
 seg('lvl',v=>{level=v;});seg('spd',v=>{speed=v;});seg('coach',v=>{coachOn=!!v;if(coachOn&&state==='user')prefetch();renderCoach();});
@@ -900,7 +919,7 @@ function loop(now){
   if(carry){const top=TOP[carry.userData.type];carry.position.set(arm.x,arm.y-95-top,arm.z);}
   if(flash&&now>flash.until){flash=null;lights();}
   if(hint&&now>hint.until){hint=null;lights();}
-  if(state==='pending'){const k=0.5+0.5*Math.sin(now/260);barMat.emissiveIntensity=0.2+0.5*k;undoMat.emissiveIntensity=0.15+0.45*k;}
+  if(state==='pending'||(safety&&safety.ready)){const k=0.5+0.5*Math.sin(now/260);barMat.emissiveIntensity=0.2+0.5*k;undoMat.emissiveIntensity=0.15+0.45*k;}
   if(cueOn&&state==='user'&&!selected&&!xray){const k=0.15+0.3*(0.5+0.5*Math.sin(now/280));movable().forEach(sq=>{const m=sqMat[sq];m.color.set(0x52D16E);m.emissive.set(0x52D16E);m.emissiveIntensity=k;const l=ledMat[sq];if(l){l.emissive.set(0x52D16E);l.emissiveIntensity=1.2;}});}
   if(xray){const w=view.clientWidth,h=view.clientHeight;LABELS.forEach((L,i)=>{const v=L[1].clone();root.localToWorld(v);v.project(cam);const el=labEls[i];if(v.z>1){el.hidden=true;return;}el.hidden=false;el.style.left=((v.x+1)/2*w)+'px';el.style.top=((1-v.y)/2*h)+'px';});}
   if(!$('mainStage').hidden){placeCam();renderer.render(scene,cam);}requestAnimationFrame(loop);}
